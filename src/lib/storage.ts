@@ -17,7 +17,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { Photo, Comment } from "./types";
+import { Photo, Comment, Like } from "./types";
 
 export async function getPhotos(): Promise<Photo[]> {
   try {
@@ -131,4 +131,70 @@ export async function uploadImageToStorage(
   // Get the download URL
   const downloadUrl = await getDownloadURL(storageRef);
   return downloadUrl;
+}
+
+export async function addCommentToPhoto(
+  id: string,
+  comment: Comment
+): Promise<Photo | null> {
+  const docRef = doc(db, PHOTOS_COLLECTION, id);
+  const docSnap = await getDoc(docRef);
+
+  if (!docSnap.exists()) return null;
+
+  const photo = { id: docSnap.id, ...docSnap.data() } as Photo;
+  const existingComments = photo.comments || [];
+
+  // Add new comment to the array
+  const updatedComments = [...existingComments, comment];
+
+  await updateDoc(docRef, {
+    comments: updatedComments,
+    // Keep legacy comment field for backward compatibility (use latest comment)
+    comment: comment,
+    caption: comment.text,
+  });
+
+  return { ...photo, comments: updatedComments };
+}
+
+export async function toggleLikeOnPhoto(
+  id: string,
+  userName: string,
+  userProfilePic?: string
+): Promise<{ photo: Photo; liked: boolean } | null> {
+  const docRef = doc(db, PHOTOS_COLLECTION, id);
+  const docSnap = await getDoc(docRef);
+
+  if (!docSnap.exists()) return null;
+
+  const photo = { id: docSnap.id, ...docSnap.data() } as Photo;
+  const existingLikes = photo.likes || [];
+
+  // Check if user already liked
+  const existingLikeIndex = existingLikes.findIndex(like => like.userName === userName);
+
+  let updatedLikes: Like[];
+  let liked: boolean;
+
+  if (existingLikeIndex >= 0) {
+    // Remove like (unlike)
+    updatedLikes = existingLikes.filter((_, index) => index !== existingLikeIndex);
+    liked = false;
+  } else {
+    // Add like
+    const newLike: Like = {
+      userName,
+      userProfilePic,
+      createdAt: new Date().toISOString(),
+    };
+    updatedLikes = [...existingLikes, newLike];
+    liked = true;
+  }
+
+  await updateDoc(docRef, {
+    likes: updatedLikes,
+  });
+
+  return { photo: { ...photo, likes: updatedLikes }, liked };
 }

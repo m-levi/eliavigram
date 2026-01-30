@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deletePhoto, updatePhotoComment } from "@/lib/storage";
+import { deletePhoto, updatePhotoComment, addCommentToPhoto, toggleLikeOnPhoto } from "@/lib/storage";
 import { Comment } from "@/lib/types";
 
 export async function DELETE(
@@ -34,18 +34,55 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { comment } = body as { comment: Comment };
 
-    const success = await updatePhotoComment(id, comment);
+    // Handle legacy comment update (replace)
+    if (body.comment && !body.action) {
+      const { comment } = body as { comment: Comment };
+      const success = await updatePhotoComment(id, comment);
 
-    if (!success) {
-      return NextResponse.json(
-        { error: "Photo not found" },
-        { status: 404 }
-      );
+      if (!success) {
+        return NextResponse.json(
+          { error: "Photo not found" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ success: true });
     }
 
-    return NextResponse.json({ success: true });
+    // Handle new actions
+    if (body.action === "add_comment") {
+      const { comment } = body as { comment: Comment };
+      const result = await addCommentToPhoto(id, comment);
+
+      if (!result) {
+        return NextResponse.json(
+          { error: "Photo not found" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ success: true, photo: result });
+    }
+
+    if (body.action === "toggle_like") {
+      const { userName, userProfilePic } = body as { userName: string; userProfilePic?: string };
+      const result = await toggleLikeOnPhoto(id, userName, userProfilePic);
+
+      if (!result) {
+        return NextResponse.json(
+          { error: "Photo not found" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ success: true, liked: result.liked, photo: result.photo });
+    }
+
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: 400 }
+    );
   } catch (error) {
     console.error("Error updating photo:", error);
     return NextResponse.json(

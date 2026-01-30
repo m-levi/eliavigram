@@ -6,7 +6,7 @@ import Polaroid from "./Polaroid";
 import PhotoUpload from "./PhotoUpload";
 import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
-import { Photo, Comment } from "@/lib/types";
+import { Photo } from "@/lib/types";
 
 export default function Gallery() {
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -67,20 +67,13 @@ export default function Gallery() {
     }
   };
 
-  const handleUpdateComment = async (id: string, comment: Comment) => {
-    try {
-      const response = await fetch(`/api/photos/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment }),
-      });
-      if (response.ok) {
-        setPhotos((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, comment, caption: comment.text } : p))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to update comment:", error);
+  const handlePhotoUpdate = (updatedPhoto: Photo) => {
+    setPhotos((prev) =>
+      prev.map((p) => (p.id === updatedPhoto.id ? updatedPhoto : p))
+    );
+    // Also update the selected photo if it's the same
+    if (selectedPhoto?.id === updatedPhoto.id) {
+      setSelectedPhoto(updatedPhoto);
     }
   };
 
@@ -235,7 +228,7 @@ export default function Gallery() {
       <PhotoModal
         photo={selectedPhoto}
         onClose={() => setSelectedPhoto(null)}
-        onUpdateComment={handleUpdateComment}
+        onPhotoUpdate={handlePhotoUpdate}
         onDelete={handleDelete}
       />
 

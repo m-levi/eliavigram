@@ -1,6 +1,14 @@
 export interface Comment {
+  id: string;
   text: string;
   author: string;
+  authorProfilePic?: string;
+  createdAt: string;
+}
+
+export interface Like {
+  userName: string;
+  userProfilePic?: string;
   createdAt: string;
 }
 
@@ -9,10 +17,18 @@ export interface Photo {
   filename: string;
   originalName: string;
   caption?: string;
-  comment?: Comment; // Comment with author name
+  comment?: Comment; // Legacy single comment for backward compatibility
+  comments?: Comment[]; // Multiple comments support
+  likes?: Like[];
   uploadedAt: string;
   rotation: number;
   imageUrl: string;
+}
+
+export interface UserProfile {
+  name: string;
+  profilePicUrl?: string;
+  createdAt: string;
 }
 
 export interface PhotoStore {
