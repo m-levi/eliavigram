@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Photo } from "@/lib/types";
@@ -13,6 +13,8 @@ interface PolaroidProps {
 }
 
 export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidProps) {
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+
   // Generate consistent but varied rotation based on photo id and index
   const rotation = useMemo(() => {
     const seed = photo.id.charCodeAt(0) + photo.id.charCodeAt(photo.id.length - 1) + index;
@@ -72,12 +74,32 @@ export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidPr
         />
 
         {/* Photo container */}
-        <div className="relative w-full aspect-square overflow-hidden bg-[#F5F5F5]">
+        <div className="relative w-full aspect-square overflow-hidden bg-[#F0EDE8]">
+          {/* Loading shimmer */}
+          {!isImageLoaded && (
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-[#F0EDE8] via-[#FAF8F5] to-[#F0EDE8]"
+              animate={{
+                backgroundPosition: ["200% 0", "-200% 0"],
+              }}
+              transition={{
+                duration: 1.5,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+              style={{
+                backgroundSize: "200% 100%",
+              }}
+            />
+          )}
+
           <Image
             src={photo.imageUrl}
             alt={photo.caption || "Photo by Eliav"}
             fill
-            className="object-cover"
+            className={`object-cover transition-opacity duration-300 ${
+              isImageLoaded ? "opacity-100" : "opacity-0"
+            }`}
             sizes={
               size === 1
                 ? "(max-width: 768px) 100vw, 600px"
@@ -86,21 +108,11 @@ export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidPr
                 : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             }
             loading={index < 6 ? "eager" : "lazy"}
+            onLoad={() => setIsImageLoaded(true)}
           />
 
           {/* Vintage overlay */}
           <div className="absolute inset-0 bg-gradient-to-br from-amber-50/10 via-transparent to-rose-50/10 pointer-events-none" />
-
-          {/* Click hint on hover */}
-          <motion.div
-            className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/10 transition-colors duration-300"
-            initial={{ opacity: 0 }}
-            whileHover={{ opacity: 1 }}
-          >
-            <span className="text-white/80 text-sm font-medium tracking-wide opacity-0 group-hover:opacity-100">
-              View
-            </span>
-          </motion.div>
         </div>
 
         {/* Comment area */}
