@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Photo } from "@/lib/types";
@@ -8,64 +8,69 @@ import { Photo } from "@/lib/types";
 interface PolaroidProps {
   photo: Photo;
   index: number;
-  onDelete?: (id: string) => void;
-  onUpdateCaption?: (id: string, caption: string) => void;
+  size?: 1 | 2 | 3;
+  onClick?: () => void;
 }
 
-export default function Polaroid({ photo, index, onDelete, onUpdateCaption }: PolaroidProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [caption, setCaption] = useState(photo.caption || "");
-
+export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidProps) {
   // Generate consistent but varied rotation based on photo id and index
   const rotation = useMemo(() => {
     const seed = photo.id.charCodeAt(0) + photo.id.charCodeAt(photo.id.length - 1) + index;
-    // Rotations between -8 and 8 degrees, with more variety
-    const rotations = [-8, -5, -3, -1.5, 0, 1.5, 3, 5, 8, -4, 4, -6, 6, -2, 2];
+    // Rotations between -6 and 6 degrees
+    const rotations = [-6, -4, -2, -1, 0, 1, 2, 4, 6, -3, 3, -5, 5, -1.5, 1.5];
     return rotations[seed % rotations.length];
   }, [photo.id, index]);
 
   // Slight vertical offset for scattered look
   const offsetY = useMemo(() => {
     const seed = photo.id.charCodeAt(1) || 0;
-    return (seed % 24) - 12; // -12px to +12px
+    return (seed % 16) - 8; // -8px to +8px
   }, [photo.id]);
 
-  const handleSaveCaption = async () => {
-    if (onUpdateCaption) {
-      await onUpdateCaption(photo.id, caption);
-    }
-    setIsEditing(false);
-  };
+  // Adjust animation delay based on grid size for smoother loading
+  const staggerDelay = size === 1 ? 0.15 : size === 2 ? 0.1 : 0.08;
 
   return (
     <motion.div
       className="polaroid-container relative"
-      initial={{ opacity: 0, y: 40, rotate: rotation * 2 }}
+      layout
+      initial={{ opacity: 0, y: 30, rotate: rotation * 1.5, scale: 0.95 }}
       whileInView={{
         opacity: 1,
         y: offsetY,
         rotate: rotation,
+        scale: 1,
       }}
-      viewport={{ once: true, margin: "-50px" }}
+      exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+      viewport={{ once: true, margin: "-30px" }}
       transition={{
-        duration: 0.6,
-        delay: index * 0.1,
+        duration: 0.5,
+        delay: Math.min(index * staggerDelay, 0.6),
         type: "spring",
-        stiffness: 100,
-        damping: 15
+        stiffness: 120,
+        damping: 18,
       }}
       whileHover={{
-        scale: 1.05,
+        scale: 1.03,
         rotate: 0,
-        y: offsetY - 8,
+        y: offsetY - 6,
         zIndex: 10,
-        transition: { duration: 0.3 }
+        transition: { duration: 0.25, ease: "easeOut" },
       }}
+      onClick={onClick}
     >
       <motion.div
-        className="polaroid cursor-pointer"
+        className="polaroid cursor-pointer relative"
         whileTap={{ scale: 0.98 }}
       >
+        {/* Film grain overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.03] pointer-events-none z-10 rounded-sm"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+          }}
+        />
+
         {/* Photo container */}
         <div className="relative w-full aspect-square overflow-hidden bg-[#F5F5F5]">
           <Image
@@ -73,60 +78,46 @@ export default function Polaroid({ photo, index, onDelete, onUpdateCaption }: Po
             alt={photo.caption || "Photo by Eliav"}
             fill
             className="object-cover"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            sizes={
+              size === 1
+                ? "(max-width: 768px) 100vw, 600px"
+                : size === 2
+                ? "(max-width: 768px) 100vw, 50vw"
+                : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            }
+            loading={index < 6 ? "eager" : "lazy"}
           />
 
-          {/* Subtle warm overlay for vintage feel */}
+          {/* Vintage overlay */}
           <div className="absolute inset-0 bg-gradient-to-br from-amber-50/10 via-transparent to-rose-50/10 pointer-events-none" />
 
-          {/* Delete button - shows on hover */}
-          {onDelete && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm("Delete this photo?")) {
-                  onDelete(photo.id);
-                }
-              }}
-              className="delete-btn absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-full flex items-center justify-center text-[#6B6B6B] hover:text-[#2D2D2D] text-sm transition-all shadow-sm"
-              title="Delete photo"
-            >
-              ✕
-            </button>
-          )}
+          {/* Click hint on hover */}
+          <motion.div
+            className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/10 transition-colors duration-300"
+            initial={{ opacity: 0 }}
+            whileHover={{ opacity: 1 }}
+          >
+            <span className="text-white/80 text-sm font-medium tracking-wide opacity-0 group-hover:opacity-100">
+              View
+            </span>
+          </motion.div>
         </div>
 
-        {/* Caption area */}
+        {/* Comment area */}
         <div className="mt-3 min-h-[32px] flex items-center justify-center px-1">
-          {isEditing ? (
-            <input
-              type="text"
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              className="caption-input"
-              placeholder="Add a caption..."
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveCaption();
-                if (e.key === "Escape") {
-                  setCaption(photo.caption || "");
-                  setIsEditing(false);
-                }
-              }}
-              onBlur={handleSaveCaption}
-            />
-          ) : (
-            <p
-              className="caption-text text-center cursor-pointer hover:text-[#2D2D2D] transition-colors w-full truncate"
-              onClick={() => setIsEditing(true)}
-            >
-              {photo.caption || "Add caption..."}
-            </p>
-          )}
+          <p className="caption-text text-center w-full truncate">
+            {photo.caption ? (
+              <span className="text-[#4A4A4A]">{photo.caption}</span>
+            ) : (
+              <span className="text-[#B0B0B0] flex items-center justify-center gap-1">
+                <span className="text-sm">💬</span> Add comment...
+              </span>
+            )}
+          </p>
         </div>
 
         {/* Date */}
-        <p className="text-[11px] text-[#A0A0A0] text-center mt-1 font-sans tracking-wide">
+        <p className="text-[10px] text-[#A0A0A0] text-center mt-1 font-sans tracking-wider uppercase">
           {new Date(photo.uploadedAt).toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",

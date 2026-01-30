@@ -4,12 +4,22 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Polaroid from "./Polaroid";
 import PhotoUpload from "./PhotoUpload";
+import SizeSlider from "./SizeSlider";
+import PhotoModal from "./PhotoModal";
 import { Photo } from "@/lib/types";
 
 export default function Gallery() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
+  const [gridSize, setGridSize] = useState<1 | 2 | 3>(3);
+  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+
+  const gridClasses = {
+    1: "grid-cols-1 max-w-xl mx-auto gap-8",
+    2: "grid-cols-1 sm:grid-cols-2 gap-6 md:gap-10",
+    3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8",
+  };
 
   const fetchPhotos = useCallback(async () => {
     try {
@@ -159,27 +169,52 @@ export default function Gallery() {
         </motion.div>
       ) : (
         <>
-          <motion.p
-            className="text-center font-serif italic text-[#6B6B6B] mb-10"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
+          {/* Controls bar */}
+          <motion.div
+            className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 px-2"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
           >
-            {photos.length} {photos.length === 1 ? "precious moment" : "precious moments"} ✨
-          </motion.p>
-          <div className="photo-grid">
-            {photos.map((photo, index) => (
-              <Polaroid
-                key={photo.id}
-                photo={photo}
-                index={index}
-                onDelete={handleDelete}
-                onUpdateCaption={handleUpdateCaption}
-              />
-            ))}
-          </div>
+            <motion.p
+              className="font-serif italic text-[#6B6B6B]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              {photos.length} {photos.length === 1 ? "precious moment" : "precious moments"} ✨
+            </motion.p>
+            <SizeSlider value={gridSize} onChange={setGridSize} />
+          </motion.div>
+
+          {/* Photo grid */}
+          <motion.div
+            className={`grid ${gridClasses[gridSize]} px-2 md:px-4`}
+            layout
+            transition={{ duration: 0.4, ease: "easeInOut" }}
+          >
+            <AnimatePresence mode="popLayout">
+              {photos.map((photo, index) => (
+                <Polaroid
+                  key={photo.id}
+                  photo={photo}
+                  index={index}
+                  size={gridSize}
+                  onClick={() => setSelectedPhoto(photo)}
+                />
+              ))}
+            </AnimatePresence>
+          </motion.div>
         </>
       )}
+
+      {/* Photo Modal */}
+      <PhotoModal
+        photo={selectedPhoto}
+        onClose={() => setSelectedPhoto(null)}
+        onUpdateCaption={handleUpdateCaption}
+        onDelete={handleDelete}
+      />
 
       {/* Footer */}
       <motion.div
