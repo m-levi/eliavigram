@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deletePhoto, updatePhotoCaption } from "@/lib/storage";
+import { deletePhoto, updatePhotoComment } from "@/lib/storage";
+import { Comment } from "@/lib/types";
 
 export async function DELETE(
   request: NextRequest,
@@ -33,9 +34,9 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { caption } = body;
+    const { comment } = body as { comment: Comment };
 
-    const success = await updatePhotoCaption(id, caption);
+    const success = await updatePhotoComment(id, comment);
 
     if (!success) {
       return NextResponse.json(

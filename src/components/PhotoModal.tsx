@@ -3,27 +3,32 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Photo } from "@/lib/types";
+import { Photo, Comment } from "@/lib/types";
 
 interface PhotoModalProps {
   photo: Photo | null;
   onClose: () => void;
-  onUpdateCaption: (id: string, caption: string) => void;
+  onUpdateComment: (id: string, comment: Comment) => void;
   onDelete: (id: string) => void;
 }
 
 export default function PhotoModal({
   photo,
   onClose,
-  onUpdateCaption,
+  onUpdateComment,
   onDelete,
 }: PhotoModalProps) {
-  const [comment, setComment] = useState("");
+  const [commentText, setCommentText] = useState("");
+  const [authorName, setAuthorName] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (photo) {
-      setComment(photo.caption || "");
+      setCommentText(photo.comment?.text || photo.caption || "");
+      setAuthorName(photo.comment?.author || "");
+      setIsImageLoaded(false);
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "unset";
@@ -35,15 +40,22 @@ export default function PhotoModal({
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !isEditing) onClose();
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
+  }, [onClose, isEditing]);
 
   const handleSaveComment = async () => {
-    if (photo) {
-      await onUpdateCaption(photo.id, comment);
+    if (photo && commentText.trim() && authorName.trim()) {
+      setIsSaving(true);
+      const comment: Comment = {
+        text: commentText.trim(),
+        author: authorName.trim(),
+        createdAt: new Date().toISOString(),
+      };
+      await onUpdateComment(photo.id, comment);
+      setIsSaving(false);
       setIsEditing(false);
     }
   };
@@ -66,26 +78,26 @@ export default function PhotoModal({
         >
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={!isEditing ? onClose : undefined}
           />
 
           {/* Modal content */}
           <motion.div
-            className="relative z-10 w-full max-w-3xl"
+            className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-auto"
             initial={{ scale: 0.9, y: 20, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.9, y: 20, opacity: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
           >
             {/* Polaroid card */}
-            <div className="polaroid-modal relative bg-white p-4 md:p-6 shadow-2xl">
+            <div className="polaroid-modal relative bg-white p-4 md:p-6 shadow-2xl rounded-sm">
               {/* Film grain overlay */}
               <div
-                className="absolute inset-0 opacity-[0.04] pointer-events-none rounded-sm"
+                className="absolute inset-0 opacity-[0.03] pointer-events-none rounded-sm"
                 style={{
                   backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
                 }}
@@ -102,24 +114,48 @@ export default function PhotoModal({
               </motion.button>
 
               {/* Image container */}
-              <div className="relative aspect-square w-full overflow-hidden bg-[#F5F5F5] rounded-sm">
+              <div className="relative aspect-square w-full overflow-hidden bg-[#F0EDE8] rounded-sm">
+                {/* Loading indicator */}
+                {!isImageLoaded && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <motion.div
+                      className="relative w-16 h-16"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    >
+                      <div className="absolute inset-0 rounded-full border-4 border-[#E8DDD4]" />
+                      <motion.div
+                        className="absolute inset-2 rounded-full border-4 border-t-[#4A6B8A] border-r-transparent border-b-transparent border-l-transparent"
+                        animate={{ rotate: -360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-xl">📷</span>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+
                 <Image
                   src={photo.imageUrl}
-                  alt={photo.caption || "Photo by Eliav"}
+                  alt={photo.comment?.text || photo.caption || "Photo by Eliav"}
                   fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 800px"
+                  className={`object-cover transition-opacity duration-300 ${
+                    isImageLoaded ? "opacity-100" : "opacity-0"
+                  }`}
+                  sizes="(max-width: 768px) 100vw, 700px"
                   priority
+                  onLoad={() => setIsImageLoaded(true)}
                 />
 
                 {/* Vintage overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-50/15 via-transparent to-rose-50/15 pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-50/10 via-transparent to-rose-50/10 pointer-events-none" />
               </div>
 
               {/* Comment section */}
               <div className="mt-4 md:mt-6 space-y-4">
                 {/* Date */}
-                <p className="text-xs text-[#A0A0A0] tracking-wide">
+                <p className="text-xs text-[#A0A0A0] tracking-wide uppercase">
                   {new Date(photo.uploadedAt).toLocaleDateString("en-US", {
                     weekday: "long",
                     month: "long",
@@ -129,35 +165,44 @@ export default function PhotoModal({
                 </p>
 
                 {/* Comment area */}
-                <div className="min-h-[60px]">
+                <div className="min-h-[80px]">
                   {isEditing ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        value={authorName}
+                        onChange={(e) => setAuthorName(e.target.value)}
+                        className="w-full px-3 py-2 border border-[#E0E0E0] rounded-lg text-[#4A4A4A] focus:outline-none focus:border-[#4A6B8A] transition-colors"
+                        placeholder="Your name..."
+                      />
                       <textarea
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
-                        className="w-full p-3 border border-[#E0E0E0] rounded-lg font-serif italic text-[#4A4A4A] resize-none focus:outline-none focus:border-[#C4B5A4] transition-colors"
-                        placeholder="Add a comment..."
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        className="w-full p-3 border border-[#E0E0E0] rounded-lg font-serif italic text-[#4A4A4A] resize-none focus:outline-none focus:border-[#4A6B8A] transition-colors"
+                        placeholder="Write a comment..."
                         rows={3}
-                        autoFocus
                       />
                       <div className="flex gap-2 justify-end">
                         <motion.button
                           className="px-4 py-2 text-sm text-[#6B6B6B] hover:text-[#2D2D2D]"
                           onClick={() => {
-                            setComment(photo.caption || "");
+                            setCommentText(photo.comment?.text || photo.caption || "");
+                            setAuthorName(photo.comment?.author || "");
                             setIsEditing(false);
                           }}
                           whileTap={{ scale: 0.95 }}
+                          disabled={isSaving}
                         >
                           Cancel
                         </motion.button>
                         <motion.button
-                          className="px-4 py-2 text-sm bg-[#2D2D2D] text-white rounded-lg"
+                          className="px-4 py-2 text-sm bg-[#4A6B8A] text-white rounded-lg disabled:opacity-50"
                           onClick={handleSaveComment}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
+                          disabled={!commentText.trim() || !authorName.trim() || isSaving}
                         >
-                          Save
+                          {isSaving ? "Saving..." : "Save"}
                         </motion.button>
                       </div>
                     </div>
@@ -167,10 +212,17 @@ export default function PhotoModal({
                       onClick={() => setIsEditing(true)}
                       whileHover={{ scale: 1.01 }}
                     >
-                      {photo.caption ? (
-                        <p className="font-serif italic text-lg text-[#4A4A4A] group-hover:text-[#2D2D2D] transition-colors">
-                          &ldquo;{photo.caption}&rdquo;
-                        </p>
+                      {photo.comment?.text || photo.caption ? (
+                        <div>
+                          <p className="font-serif italic text-lg text-[#4A4A4A] group-hover:text-[#2D2D2D] transition-colors">
+                            &ldquo;{photo.comment?.text || photo.caption}&rdquo;
+                          </p>
+                          {photo.comment?.author && (
+                            <p className="text-sm text-[#8B7355] mt-1">
+                              — {photo.comment.author}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <p className="font-serif italic text-[#A0A0A0] group-hover:text-[#6B6B6B] transition-colors flex items-center gap-2">
                           <span>💬</span> Add a comment...
@@ -181,7 +233,7 @@ export default function PhotoModal({
                 </div>
 
                 {/* Actions */}
-                <div className="flex justify-between items-center pt-2 border-t border-[#F0F0F0]">
+                <div className="flex justify-between items-center pt-3 border-t border-[#F0F0F0]">
                   <motion.button
                     className="text-sm text-[#E57373] hover:text-[#D32F2F] flex items-center gap-1"
                     onClick={handleDelete}
@@ -191,7 +243,7 @@ export default function PhotoModal({
                     <span>🗑️</span> Delete
                   </motion.button>
                   <p className="text-xs text-[#C4B5A4] font-serif italic">
-                    tap photo to close
+                    Click outside to close
                   </p>
                 </div>
               </div>

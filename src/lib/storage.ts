@@ -17,7 +17,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { Photo } from "./types";
+import { Photo, Comment } from "./types";
 
 export async function getPhotos(): Promise<Photo[]> {
   try {
@@ -85,16 +85,19 @@ export async function deletePhoto(id: string): Promise<boolean> {
   return true;
 }
 
-export async function updatePhotoCaption(
+export async function updatePhotoComment(
   id: string,
-  caption: string
+  comment: Comment
 ): Promise<boolean> {
   const docRef = doc(db, PHOTOS_COLLECTION, id);
   const docSnap = await getDoc(docRef);
 
   if (!docSnap.exists()) return false;
 
-  await updateDoc(docRef, { caption });
+  await updateDoc(docRef, {
+    comment,
+    caption: comment.text, // Keep caption for backward compatibility
+  });
 
   return true;
 }

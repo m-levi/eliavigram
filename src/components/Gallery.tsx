@@ -6,7 +6,7 @@ import Polaroid from "./Polaroid";
 import PhotoUpload from "./PhotoUpload";
 import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
-import { Photo } from "@/lib/types";
+import { Photo, Comment } from "@/lib/types";
 
 export default function Gallery() {
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -21,12 +21,23 @@ export default function Gallery() {
     3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8",
   };
 
+  // Shuffle array helper
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   const fetchPhotos = useCallback(async () => {
     try {
       const response = await fetch("/api/photos");
       const data = await response.json();
       if (Array.isArray(data)) {
-        setPhotos(data);
+        // Shuffle photos for a fresh experience each time
+        setPhotos(shuffleArray(data));
       } else {
         console.error("API returned non-array:", data);
         setPhotos([]);
@@ -56,20 +67,20 @@ export default function Gallery() {
     }
   };
 
-  const handleUpdateCaption = async (id: string, caption: string) => {
+  const handleUpdateComment = async (id: string, comment: Comment) => {
     try {
       const response = await fetch(`/api/photos/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caption }),
+        body: JSON.stringify({ comment }),
       });
       if (response.ok) {
         setPhotos((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, caption } : p))
+          prev.map((p) => (p.id === id ? { ...p, comment, caption: comment.text } : p))
         );
       }
     } catch (error) {
-      console.error("Failed to update caption:", error);
+      console.error("Failed to update comment:", error);
     }
   };
 
@@ -224,7 +235,7 @@ export default function Gallery() {
       <PhotoModal
         photo={selectedPhoto}
         onClose={() => setSelectedPhoto(null)}
-        onUpdateCaption={handleUpdateCaption}
+        onUpdateComment={handleUpdateComment}
         onDelete={handleDelete}
       />
 
