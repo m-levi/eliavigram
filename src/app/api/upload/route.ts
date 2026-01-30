@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { savePhoto, uploadImageToStorage } from "@/lib/storage";
+import { savePhoto, uploadImageToStorage, checkDuplicatePhoto } from "@/lib/storage";
 import { Photo } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
@@ -20,6 +20,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "File must be an image" },
         { status: 400 }
+      );
+    }
+
+    // Check for duplicate photo
+    const isDuplicate = await checkDuplicatePhoto(file.name);
+    if (isDuplicate) {
+      return NextResponse.json(
+        { skipped: true, message: "Photo already exists", filename: file.name },
+        { status: 200 }
       );
     }
 

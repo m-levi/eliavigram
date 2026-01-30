@@ -9,6 +9,7 @@ import {
   query,
   orderBy,
   getDoc,
+  where,
 } from "firebase/firestore";
 import {
   ref,
@@ -96,6 +97,18 @@ export async function updatePhotoCaption(
   await updateDoc(docRef, { caption });
 
   return true;
+}
+
+export async function checkDuplicatePhoto(originalName: string): Promise<boolean> {
+  try {
+    const photosRef = collection(db, PHOTOS_COLLECTION);
+    const q = query(photosRef, where("originalName", "==", originalName));
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  } catch (error) {
+    console.error("Error checking for duplicate photo:", error);
+    return false; // If check fails, allow upload
+  }
 }
 
 export async function uploadImageToStorage(

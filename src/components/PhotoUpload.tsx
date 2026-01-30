@@ -25,15 +25,14 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
 
   const uploadFiles = async (files: FileList) => {
     setIsUploading(true);
-    const totalFiles = files.length;
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
+    const totalFiles = imageFiles.length;
     let uploadedCount = 0;
+    let skippedCount = 0;
 
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) {
-        continue;
-      }
-
-      setUploadProgress(`Uploading photo ${uploadedCount + 1} of ${totalFiles}...`);
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
+      setUploadProgress(`Processing ${i + 1} of ${totalFiles}...`);
 
       const formData = new FormData();
       formData.append("file", file);
@@ -44,15 +43,25 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
           body: formData,
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Failed to upload:", file.name, errorData);
-        } else {
+        const data = await response.json();
+
+        if (data.skipped) {
+          skippedCount++;
+          console.log(`Skipped duplicate: ${file.name}`);
+        } else if (response.ok) {
           uploadedCount++;
+        } else {
+          console.error("Failed to upload:", file.name, data);
         }
       } catch (error) {
         console.error("Upload error:", error);
       }
+    }
+
+    // Show summary briefly
+    if (skippedCount > 0) {
+      setUploadProgress(`Done! ${uploadedCount} added, ${skippedCount} duplicates skipped`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     setIsUploading(false);
