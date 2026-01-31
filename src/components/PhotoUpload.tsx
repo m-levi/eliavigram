@@ -32,7 +32,7 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
 
     for (let i = 0; i < mediaFiles.length; i++) {
       const file = mediaFiles[i];
-      setUploadProgress(`Processing ${i + 1} of ${totalFiles}...`);
+      setUploadProgress(`Processing ${i + 1} of ${totalFiles}... (AI captioning)`);
 
       const formData = new FormData();
       formData.append("file", file);

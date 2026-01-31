@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { savePhoto, uploadImageToStorage, checkDuplicatePhoto } from "@/lib/storage";
 import { Photo, MediaType } from "@/lib/types";
+import { generatePhotoCaption } from "@/lib/ai";
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,6 +45,18 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const imageUrl = await uploadImageToStorage(buffer, uniqueFilename, file.type);
 
+    // Generate AI caption for images (not videos)
+    let caption = "";
+    if (isImage) {
+      try {
+        const base64 = buffer.toString("base64");
+        caption = await generatePhotoCaption(base64, file.type);
+      } catch (captionError) {
+        console.error("Failed to generate AI caption:", captionError);
+        // Continue without caption
+      }
+    }
+
     // Create photo record with random rotation for that authentic polaroid feel
     const rotation = (Math.random() - 0.5) * 8; // Between -4 and 4 degrees
 
@@ -55,6 +68,7 @@ export async function POST(request: NextRequest) {
       rotation,
       imageUrl,
       mediaType,
+      caption: caption || undefined,
     };
 
     await savePhoto(photo);
