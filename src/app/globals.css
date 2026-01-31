@@ -221,3 +221,138 @@ img {
 .polaroid-container:hover .delete-btn {
   opacity: 1;
 }
+
+/* Safe area handling for notched phones */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 12px);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 8px), 8px);
+}
+
+/* Hide scrollbar for story bar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile bottom nav spacer */
+.mobile-nav-spacer {
+  height: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .mobile-nav-spacer {
+    height: 0;
+  }
+}
+
+/* Story progress bar glow */
+.story-progress-glow {
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+/* Story ring animations */
+@keyframes storyRingPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(232, 180, 184, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(232, 180, 184, 0);
+  }
+}
+
+.story-ring-pulse {
+  animation: storyRingPulse 2s ease-in-out infinite;
+}
+
+/* Cube slide animation for stories */
+@keyframes cubeSlideLeft {
+  from {
+    transform: translateX(100%) rotateY(-90deg);
+    transform-origin: left center;
+  }
+  to {
+    transform: translateX(0) rotateY(0);
+    transform-origin: left center;
+  }
+}
+
+@keyframes cubeSlideRight {
+  from {
+    transform: translateX(-100%) rotateY(90deg);
+    transform-origin: right center;
+  }
+  to {
+    transform: translateX(0) rotateY(0);
+    transform-origin: right center;
+  }
+}
+
+/* Touch-friendly styles */
+@media (hover: none) and (pointer: coarse) {
+  .polaroid-container .delete-btn {
+    opacity: 1;
+  }
+
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Better mobile grid */
+@media (max-width: 640px) {
+  .polaroid {
+    padding: 8px 8px 36px 8px;
+  }
+
+  .polaroid::before {
+    width: 40px;
+    height: 14px;
+    top: -5px;
+  }
+}
+
+/* Story viewer mobile optimizations */
+.story-viewer-mobile {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: pan-y pinch-zoom;
+}
+
+/* Haptic feedback visual cue */
+@keyframes tapFeedback {
+  0% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.tap-feedback::after {
+  content: '';
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  background: white;
+  border-radius: 50%;
+  animation: tapFeedback 0.3s ease-out forwards;
+}
