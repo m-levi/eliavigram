@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, PanInfo } from "framer-motion";
 import { Photo } from "@/lib/types";
+import { StoryTheme } from "@/lib/ai";
 
 interface StoriesProps {
   photos: Photo[];
@@ -14,46 +15,176 @@ interface StoriesProps {
 
 const STORY_DURATION = 5000; // 5 seconds per story
 
+// Story ring component for the selection screen
+function StoryRing({
+  story,
+  photos,
+  onClick,
+  isActive,
+}: {
+  story: StoryTheme;
+  photos: Photo[];
+  onClick: () => void;
+  isActive: boolean;
+}) {
+  const firstPhoto = photos.find((p) => p.id === story.photoIds[0]);
+
+  return (
+    <motion.button
+      onClick={onClick}
+      className="flex flex-col items-center gap-2 min-w-[80px]"
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+    >
+      <div
+        className={`p-[3px] rounded-full bg-gradient-to-tr ${story.gradient} ${
+          isActive ? "opacity-100" : "opacity-80"
+        }`}
+      >
+        <div className="p-[2px] bg-black rounded-full">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-gray-800 relative">
+            {firstPhoto ? (
+              <Image
+                src={firstPhoto.imageUrl}
+                alt={story.title}
+                fill
+                className="object-cover"
+                sizes="80px"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-2xl">
+                {story.emoji}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="text-white text-xs font-medium truncate max-w-[80px]">
+          {story.title}
+        </p>
+        <p className="text-white/50 text-[10px]">{story.photoIds.length} photos</p>
+      </div>
+    </motion.button>
+  );
+}
+
 export default function Stories({
   photos,
   startIndex = 0,
   onClose,
   currentUserName,
 }: StoriesProps) {
-  const [currentIndex, setCurrentIndex] = useState(startIndex);
+  const [stories, setStories] = useState<StoryTheme[]>([]);
+  const [isLoadingStories, setIsLoadingStories] = useState(true);
+  const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [direction, setDirection] = useState(0);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const currentPhoto = photos[currentIndex];
+  // Get current story and its photos
+  const currentStory = activeStoryIndex !== null ? stories[activeStoryIndex] : null;
+  const storyPhotos = currentStory
+    ? currentStory.photoIds
+        .map((id) => photos.find((p) => p.id === id))
+        .filter((p): p is Photo => p !== undefined)
+    : [];
+  const currentPhoto = storyPhotos[currentPhotoIndex];
 
-  // Go to next story
-  const goNext = useCallback(() => {
-    if (currentIndex < photos.length - 1) {
-      setDirection(1);
-      setCurrentIndex((prev) => prev + 1);
-      setProgress(0);
-    } else {
-      onClose();
-    }
-  }, [currentIndex, photos.length, onClose]);
-
-  // Go to previous story
-  const goPrev = useCallback(() => {
-    if (currentIndex > 0) {
-      setDirection(-1);
-      setCurrentIndex((prev) => prev - 1);
-      setProgress(0);
-    } else {
-      setProgress(0);
-    }
-  }, [currentIndex]);
-
-  // Handle progress timer
+  // Load AI-generated stories
   useEffect(() => {
-    if (isPaused) return;
+    setIsLoadingStories(true);
+    fetch("/api/stories")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.stories && data.stories.length > 0) {
+          setStories(data.stories);
+        } else {
+          // Fallback: create a single story with all photos
+          setStories([
+            {
+              id: "all",
+              title: "All Moments",
+              subtitle: "Your photo collection",
+              emoji: "📷",
+              photoIds: photos.map((p) => p.id),
+              gradient: "from-pink-400 to-purple-500",
+            },
+          ]);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load stories:", error);
+        // Fallback
+        setStories([
+          {
+            id: "all",
+            title: "All Moments",
+            subtitle: "Your photo collection",
+            emoji: "📷",
+            photoIds: photos.map((p) => p.id),
+            gradient: "from-pink-400 to-purple-500",
+          },
+        ]);
+      })
+      .finally(() => setIsLoadingStories(false));
+  }, [photos]);
+
+  // Go to next photo/story
+  const goNext = useCallback(() => {
+    if (currentPhotoIndex < storyPhotos.length - 1) {
+      // Next photo in current story
+      setDirection(1);
+      setCurrentPhotoIndex((prev) => prev + 1);
+      setProgress(0);
+      setIsImageLoaded(false);
+    } else if (activeStoryIndex !== null && activeStoryIndex < stories.length - 1) {
+      // Next story
+      setDirection(1);
+      setActiveStoryIndex((prev) => (prev !== null ? prev + 1 : 0));
+      setCurrentPhotoIndex(0);
+      setProgress(0);
+      setIsImageLoaded(false);
+    } else {
+      // End of all stories - go back to selection
+      setActiveStoryIndex(null);
+      setCurrentPhotoIndex(0);
+      setProgress(0);
+    }
+  }, [currentPhotoIndex, storyPhotos.length, activeStoryIndex, stories.length]);
+
+  // Go to previous photo/story
+  const goPrev = useCallback(() => {
+    if (currentPhotoIndex > 0) {
+      // Previous photo in current story
+      setDirection(-1);
+      setCurrentPhotoIndex((prev) => prev - 1);
+      setProgress(0);
+      setIsImageLoaded(false);
+    } else if (activeStoryIndex !== null && activeStoryIndex > 0) {
+      // Previous story (go to last photo)
+      const prevStory = stories[activeStoryIndex - 1];
+      const prevStoryPhotos = prevStory.photoIds.filter((id) =>
+        photos.some((p) => p.id === id)
+      );
+      setDirection(-1);
+      setActiveStoryIndex((prev) => (prev !== null ? prev - 1 : 0));
+      setCurrentPhotoIndex(prevStoryPhotos.length - 1);
+      setProgress(0);
+      setIsImageLoaded(false);
+    } else {
+      // At beginning - restart current photo
+      setProgress(0);
+    }
+  }, [currentPhotoIndex, activeStoryIndex, stories, photos]);
+
+  // Handle progress timer (only when viewing a story)
+  useEffect(() => {
+    if (activeStoryIndex === null || isPaused || !isImageLoaded) return;
 
     progressInterval.current = setInterval(() => {
       setProgress((prev) => {
@@ -61,7 +192,7 @@ export default function Stories({
           goNext();
           return 0;
         }
-        return prev + (100 / (STORY_DURATION / 50));
+        return prev + 100 / (STORY_DURATION / 50);
       });
     }, 50);
 
@@ -70,22 +201,32 @@ export default function Stories({
         clearInterval(progressInterval.current);
       }
     };
-  }, [isPaused, goNext, currentIndex]);
+  }, [isPaused, goNext, currentPhotoIndex, activeStoryIndex, isImageLoaded]);
 
   // Handle keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight" || e.key === " ") goNext();
-      if (e.key === "ArrowLeft") goPrev();
+      if (e.key === "Escape") {
+        if (activeStoryIndex !== null) {
+          setActiveStoryIndex(null);
+        } else {
+          onClose();
+        }
+      }
+      if (activeStoryIndex !== null) {
+        if (e.key === "ArrowRight" || e.key === " ") goNext();
+        if (e.key === "ArrowLeft") goPrev();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, goNext, goPrev]);
+  }, [onClose, goNext, goPrev, activeStoryIndex]);
 
   // Handle tap zones
   const handleTap = (e: React.MouseEvent) => {
+    if (activeStoryIndex === null) return;
+
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
 
@@ -99,41 +240,144 @@ export default function Stories({
     }
   };
 
-  // Handle touch for swipe down to close
-  const touchStartY = useRef(0);
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-    setIsPaused(true);
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
-    if (deltaY > 100) {
-      onClose();
+  // Handle swipe gestures
+  const handleDragEnd = (
+    _: MouseEvent | TouchEvent | PointerEvent,
+    info: PanInfo
+  ) => {
+    if (activeStoryIndex === null) {
+      // On selection screen, swipe down to close
+      if (info.offset.y > 100) {
+        onClose();
+      }
+    } else {
+      // In story view
+      if (info.offset.y > 100) {
+        // Swipe down - go back to selection
+        setActiveStoryIndex(null);
+        setCurrentPhotoIndex(0);
+        setProgress(0);
+      } else if (info.offset.x < -50) {
+        goNext();
+      } else if (info.offset.x > 50) {
+        goPrev();
+      }
     }
     setIsPaused(false);
   };
 
-  // Check if user has liked
+  // Check if user has liked current photo
   const userHasLiked = currentUserName
-    ? currentPhoto.likes?.some((like) => like.userName === currentUserName)
+    ? currentPhoto?.likes?.some((like) => like.userName === currentUserName)
     : false;
 
   const slideVariants = {
     enter: (direction: number) => ({
       x: direction > 0 ? "100%" : "-100%",
       opacity: 0,
+      scale: 0.95,
     }),
     center: {
       x: 0,
       opacity: 1,
+      scale: 1,
     },
     exit: (direction: number) => ({
       x: direction < 0 ? "100%" : "-100%",
       opacity: 0,
+      scale: 0.95,
     }),
   };
 
+  // Story selection screen
+  if (activeStoryIndex === null) {
+    return (
+      <motion.div
+        className="fixed inset-0 z-50 bg-black flex flex-col"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.2}
+        onDragEnd={handleDragEnd}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 pt-12">
+          <h1 className="text-white text-xl font-semibold">Stories</h1>
+          <button
+            onClick={onClose}
+            className="text-white p-2 hover:bg-white/10 rounded-full transition-colors"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* Story rings */}
+        <div className="flex-1 flex flex-col justify-center px-4">
+          {isLoadingStories ? (
+            <div className="flex items-center justify-center">
+              <motion.div
+                className="text-4xl"
+                animate={{ rotate: 360, scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                ✨
+              </motion.div>
+              <p className="text-white/60 ml-4">Creating your stories...</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-white/60 text-sm mb-6 text-center">
+                Tap a story to start watching
+              </p>
+              <div className="flex gap-4 overflow-x-auto pb-4 px-2 justify-center flex-wrap">
+                {stories.map((story, index) => (
+                  <StoryRing
+                    key={story.id}
+                    story={story}
+                    photos={photos}
+                    onClick={() => {
+                      setActiveStoryIndex(index);
+                      setCurrentPhotoIndex(0);
+                      setProgress(0);
+                      setIsImageLoaded(false);
+                    }}
+                    isActive={false}
+                  />
+                ))}
+              </div>
+              <p className="text-white/40 text-xs mt-8 text-center">
+                Swipe down to close
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* AI badge */}
+        <div className="p-4 pb-8 flex justify-center">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-full">
+            <span className="text-sm">✨</span>
+            <span className="text-white/60 text-xs">AI-curated stories</span>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Full-screen story viewer
   return (
     <motion.div
       className="fixed inset-0 z-50 bg-black"
@@ -141,21 +385,21 @@ export default function Stories({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      {/* Progress bars */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex gap-1 p-2 pt-3">
-        {photos.map((_, index) => (
+      {/* Progress bars for current story */}
+      <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 p-2 pt-3 safe-area-top">
+        {storyPhotos.map((_, index) => (
           <div
             key={index}
-            className="h-0.5 flex-1 bg-white/30 rounded-full overflow-hidden"
+            className="h-[3px] flex-1 bg-white/30 rounded-full overflow-hidden"
           >
             <motion.div
               className="h-full bg-white rounded-full"
               initial={{ width: 0 }}
               animate={{
                 width:
-                  index < currentIndex
+                  index < currentPhotoIndex
                     ? "100%"
-                    : index === currentIndex
+                    : index === currentPhotoIndex
                     ? `${progress}%`
                     : "0%",
               }}
@@ -165,24 +409,47 @@ export default function Stories({
         ))}
       </div>
 
-      {/* Header */}
-      <div className="absolute top-6 left-0 right-0 z-20 flex items-center justify-between px-4 py-2">
+      {/* Header with story info */}
+      <div className="absolute top-8 left-0 right-0 z-30 flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E8B4B8] to-[#A8D8EA] flex items-center justify-center">
-            <span className="text-sm">📷</span>
+          {/* Story thumbnail */}
+          <div
+            className={`p-[2px] rounded-full bg-gradient-to-tr ${currentStory?.gradient || "from-pink-400 to-purple-500"}`}
+          >
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-black relative">
+              {storyPhotos[0] && (
+                <Image
+                  src={storyPhotos[0].imageUrl}
+                  alt={currentStory?.title || "Story"}
+                  fill
+                  className="object-cover"
+                  sizes="40px"
+                />
+              )}
+            </div>
           </div>
           <div>
-            <p className="text-white text-sm font-medium">Eliavigram</p>
+            <p className="text-white text-sm font-semibold flex items-center gap-2">
+              {currentStory?.emoji} {currentStory?.title}
+            </p>
             <p className="text-white/60 text-xs">
-              {new Date(currentPhoto.uploadedAt).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              })}
+              {currentPhoto
+                ? new Date(currentPhoto.uploadedAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                : ""}
             </p>
           </div>
         </div>
+
+        {/* Close button */}
         <button
-          onClick={onClose}
+          onClick={() => {
+            setActiveStoryIndex(null);
+            setCurrentPhotoIndex(0);
+            setProgress(0);
+          }}
           className="text-white p-2 hover:bg-white/10 rounded-full transition-colors"
         >
           <svg
@@ -201,87 +468,153 @@ export default function Stories({
         </button>
       </div>
 
-      {/* Main content area */}
-      <div
+      {/* Main photo area - FULL SCREEN */}
+      <motion.div
         ref={containerRef}
-        className="absolute inset-0 flex items-center justify-center"
+        className="absolute inset-0"
         onClick={handleTap}
         onMouseDown={() => setIsPaused(true)}
         onMouseUp={() => setIsPaused(false)}
         onMouseLeave={() => setIsPaused(false)}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.2}
+        onDragStart={() => setIsPaused(true)}
+        onDragEnd={handleDragEnd}
       >
         <AnimatePresence initial={false} custom={direction} mode="popLayout">
-          <motion.div
-            key={currentPhoto.id}
-            custom={direction}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="absolute inset-0 flex items-center justify-center"
-          >
-            {currentPhoto.mediaType === "video" ? (
-              <video
-                src={currentPhoto.imageUrl}
-                className="max-h-full max-w-full object-contain"
-                autoPlay
-                muted
-                playsInline
-                loop
-              />
-            ) : (
-              <Image
-                src={currentPhoto.imageUrl}
-                alt={currentPhoto.caption || "Photo"}
-                fill
-                className="object-contain"
-                priority
-              />
-            )}
-          </motion.div>
+          {currentPhoto && (
+            <motion.div
+              key={currentPhoto.id}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="absolute inset-0"
+            >
+              {/* Loading indicator */}
+              {!isImageLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                  <motion.div
+                    className="text-4xl"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  >
+                    📷
+                  </motion.div>
+                </div>
+              )}
+
+              {currentPhoto.mediaType === "video" ? (
+                <video
+                  src={currentPhoto.imageUrl}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  playsInline
+                  loop
+                  onLoadedData={() => setIsImageLoaded(true)}
+                />
+              ) : (
+                <Image
+                  src={currentPhoto.imageUrl}
+                  alt={currentPhoto.caption || "Photo"}
+                  fill
+                  className={`object-cover transition-opacity duration-300 ${
+                    isImageLoaded ? "opacity-100" : "opacity-0"
+                  }`}
+                  priority
+                  sizes="100vw"
+                  onLoad={() => setIsImageLoaded(true)}
+                  onError={() => setIsImageLoaded(true)}
+                />
+              )}
+
+              {/* Gradient overlays for readability */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70 pointer-events-none" />
+            </motion.div>
+          )}
         </AnimatePresence>
 
-        {/* Tap zones indicators (visible on hover) */}
-        <div className="absolute inset-y-0 left-0 w-1/3 flex items-center justify-start pl-4 opacity-0 hover:opacity-100 transition-opacity">
-          <div className="text-white/50 text-4xl">‹</div>
+        {/* Navigation hints (subtle) */}
+        <div className="absolute inset-y-0 left-0 w-1/4 flex items-center justify-start pl-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+          <motion.div
+            className="text-white/30 text-5xl"
+            initial={{ x: -10 }}
+            animate={{ x: 0 }}
+          >
+            ‹
+          </motion.div>
         </div>
-        <div className="absolute inset-y-0 right-0 w-1/3 flex items-center justify-end pr-4 opacity-0 hover:opacity-100 transition-opacity">
-          <div className="text-white/50 text-4xl">›</div>
+        <div className="absolute inset-y-0 right-0 w-1/4 flex items-center justify-end pr-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+          <motion.div
+            className="text-white/30 text-5xl"
+            initial={{ x: 10 }}
+            animate={{ x: 0 }}
+          >
+            ›
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Bottom info */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 p-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+      {/* Bottom info overlay */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 safe-area-bottom">
         {/* Caption */}
-        {currentPhoto.caption && (
-          <p className="text-white text-sm mb-3 max-w-md">
+        {currentPhoto?.caption && (
+          <motion.p
+            className="text-white text-base mb-4 max-w-md font-medium drop-shadow-lg"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            key={currentPhoto.id}
+          >
             {currentPhoto.caption}
-          </p>
+          </motion.p>
         )}
 
         {/* Stats row */}
-        <div className="flex items-center gap-4 text-white/80 text-sm">
+        <div className="flex items-center gap-6 text-white/90">
           {/* Likes */}
-          <div className="flex items-center gap-1.5">
-            <span>{userHasLiked ? "❤️" : "🤍"}</span>
-            <span>{currentPhoto.likes?.length || 0}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{userHasLiked ? "❤️" : "🤍"}</span>
+            <span className="font-medium">{currentPhoto?.likes?.length || 0}</span>
           </div>
 
           {/* Comments */}
-          {(currentPhoto.comments?.length || 0) > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span>💬</span>
-              <span>{currentPhoto.comments?.length}</span>
+          {(currentPhoto?.comments?.length || 0) > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💬</span>
+              <span className="font-medium">{currentPhoto?.comments?.length}</span>
             </div>
           )}
 
           {/* Photo counter */}
-          <div className="ml-auto text-white/50 text-xs">
-            {currentIndex + 1} / {photos.length}
+          <div className="ml-auto flex items-center gap-2 bg-black/30 px-3 py-1 rounded-full">
+            <span className="text-sm text-white/70">
+              {currentPhotoIndex + 1} / {storyPhotos.length}
+            </span>
           </div>
+        </div>
+
+        {/* Story navigation dots */}
+        <div className="flex justify-center gap-2 mt-4">
+          {stories.map((story, index) => (
+            <button
+              key={story.id}
+              onClick={() => {
+                setActiveStoryIndex(index);
+                setCurrentPhotoIndex(0);
+                setProgress(0);
+                setIsImageLoaded(false);
+              }}
+              className={`w-2 h-2 rounded-full transition-all ${
+                index === activeStoryIndex
+                  ? "bg-white w-6"
+                  : "bg-white/40 hover:bg-white/60"
+              }`}
+            />
+          ))}
         </div>
       </div>
 
@@ -289,14 +622,14 @@ export default function Stories({
       <AnimatePresence>
         {isPaused && (
           <motion.div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-40"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="bg-black/50 rounded-full p-4">
+            <div className="bg-black/60 backdrop-blur-sm rounded-full p-6">
               <svg
-                className="w-8 h-8 text-white"
+                className="w-10 h-10 text-white"
                 fill="currentColor"
                 viewBox="0 0 24 24"
               >

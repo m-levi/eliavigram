@@ -409,6 +409,7 @@ export default function Gallery() {
         }}
         onPhotoUpdate={handlePhotoUpdate}
         onDelete={handleDelete}
+        onSelectPhoto={(photo) => setSelectedPhoto(photo)}
       />
 
       {/* Stories Mode */}
