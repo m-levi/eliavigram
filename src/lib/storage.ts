@@ -103,6 +103,20 @@ export async function updatePhotoComment(
   return true;
 }
 
+export async function updatePhotoCaption(
+  id: string,
+  caption: string
+): Promise<boolean> {
+  const docRef = doc(db, PHOTOS_COLLECTION, id);
+  const docSnap = await getDoc(docRef);
+
+  if (!docSnap.exists()) return false;
+
+  await updateDoc(docRef, { caption });
+
+  return true;
+}
+
 export async function checkDuplicatePhoto(originalName: string): Promise<boolean> {
   try {
     const photosRef = collection(db, PHOTOS_COLLECTION);

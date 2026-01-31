@@ -7,7 +7,8 @@ import PhotoUpload from "./PhotoUpload";
 import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
 import CommentsFeed from "./CommentsFeed";
-import { getSeenPhotos, markPhotoAsSeen } from "./PasswordGate";
+import { getSeenPhotos, markPhotoAsSeen, getCurrentUser, UserProfile } from "./PasswordGate";
+import Stories from "./Stories";
 import { Photo } from "@/lib/types";
 
 type TabType = "photos" | "comments";
@@ -20,6 +21,9 @@ export default function Gallery() {
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("photos");
   const [seenPhotos, setSeenPhotos] = useState<Set<string>>(new Set());
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [likingPhotoId, setLikingPhotoId] = useState<string | null>(null);
+  const [showStories, setShowStories] = useState(false);
 
   const gridClasses = {
     1: "grid-cols-1 max-w-xl mx-auto gap-8",
@@ -71,7 +75,44 @@ export default function Gallery() {
 
   useEffect(() => {
     fetchPhotos();
+    setCurrentUser(getCurrentUser());
   }, [fetchPhotos]);
+
+  // Handle like action from Polaroid
+  const handleLikePhoto = useCallback(async (photo: Photo) => {
+    if (!currentUser || likingPhotoId === photo.id) return;
+
+    setLikingPhotoId(photo.id);
+
+    try {
+      const response = await fetch(`/api/photos/${photo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle_like",
+          userName: currentUser.name,
+          userProfilePic: currentUser.profilePicUrl,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        handlePhotoUpdate(data.photo);
+      }
+    } catch (error) {
+      console.error("Failed to toggle like:", error);
+    } finally {
+      setLikingPhotoId(null);
+    }
+  }, [currentUser, likingPhotoId]);
+
+  // Handle photo becoming visible in viewport
+  const handlePhotoVisible = useCallback((photoId: string) => {
+    if (!seenPhotos.has(photoId)) {
+      markPhotoAsSeen(photoId);
+      setSeenPhotos(prev => new Set([...prev, photoId]));
+    }
+  }, [seenPhotos]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -308,9 +349,23 @@ export default function Gallery() {
                 </span>
               )}
             </motion.p>
-            {/* Hide size picker on mobile */}
-            <div className="hidden sm:block">
-              <SizeSlider value={gridSize} onChange={setGridSize} />
+            {/* Controls: Stories button and size picker */}
+            <div className="flex items-center gap-3">
+              {/* Stories/Slideshow button */}
+              <motion.button
+                onClick={() => setShowStories(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#E8B4B8] to-[#A8D8EA] text-[#2D2D2D] rounded-full text-sm font-medium shadow-sm"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <span>▶</span>
+                <span className="hidden sm:inline">Stories</span>
+              </motion.button>
+
+              {/* Hide size picker on mobile */}
+              <div className="hidden sm:block">
+                <SizeSlider value={gridSize} onChange={setGridSize} />
+              </div>
             </div>
           </motion.div>
 
@@ -329,6 +384,11 @@ export default function Gallery() {
                   size={gridSize}
                   isNew={!seenPhotos.has(photo.id)}
                   onClick={() => setSelectedPhoto(photo)}
+                  currentUserName={currentUser?.name}
+                  currentUserProfilePic={currentUser?.profilePicUrl}
+                  onLike={handleLikePhoto}
+                  isLiking={likingPhotoId === photo.id}
+                  onVisible={handlePhotoVisible}
                 />
               ))}
             </AnimatePresence>
@@ -350,6 +410,17 @@ export default function Gallery() {
         onPhotoUpdate={handlePhotoUpdate}
         onDelete={handleDelete}
       />
+
+      {/* Stories Mode */}
+      <AnimatePresence>
+        {showStories && photos.length > 0 && (
+          <Stories
+            photos={photos}
+            onClose={() => setShowStories(false)}
+            currentUserName={currentUser?.name}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <motion.div
