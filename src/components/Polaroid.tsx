@@ -263,43 +263,41 @@ export default function Polaroid({
           </p>
         </div>
 
-        {/* Date and Like row */}
-        <div className="flex items-center justify-between mt-1 px-1">
-          <p className="text-[10px] text-[#A0A0A0] font-sans tracking-wider uppercase">
-            {new Date(photo.uploadedAt).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </p>
-
-          {/* Like button */}
-          {currentUserName && onLike && (
-            <div className="flex items-center gap-1">
-              <motion.button
-                className={`text-base transition-colors ${
-                  userHasLiked ? "text-red-500" : "text-gray-300 hover:text-red-400"
-                }`}
-                onClick={handleLike}
-                whileHover={{ scale: 1.2 }}
-                whileTap={{ scale: 0.9 }}
-                disabled={isLiking}
+        {/* Like row - centered */}
+        {currentUserName && onLike && (
+          <div className="flex items-center justify-center gap-3 mt-2">
+            <motion.button
+              className="flex items-center gap-1.5"
+              onClick={handleLike}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              disabled={isLiking}
+            >
+              <motion.span
+                className="text-lg"
+                animate={userHasLiked ? { scale: [1, 1.3, 1] } : {}}
+                transition={{ duration: 0.3 }}
               >
-                <motion.span
-                  animate={userHasLiked ? { scale: [1, 1.3, 1] } : {}}
-                  transition={{ duration: 0.3 }}
-                >
-                  {userHasLiked ? "❤️" : "🤍"}
-                </motion.span>
-              </motion.button>
+                {userHasLiked ? "❤️" : "🤍"}
+              </motion.span>
               {likesCount > 0 && (
-                <span className="text-[10px] text-[#A0A0A0]">
+                <span className="text-xs text-[#6B6B6B]">
                   {likesCount}
                 </span>
               )}
-            </div>
-          )}
-        </div>
+            </motion.button>
+
+            {/* Comment count */}
+            {(photo.comments?.length || 0) > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="text-lg">💬</span>
+                <span className="text-xs text-[#6B6B6B]">
+                  {photo.comments?.length}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );
