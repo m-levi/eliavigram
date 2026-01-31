@@ -9,10 +9,11 @@ interface PolaroidProps {
   photo: Photo;
   index: number;
   size?: 1 | 2 | 3;
+  isNew?: boolean;
   onClick?: () => void;
 }
 
-export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidProps) {
+export default function Polaroid({ photo, index, size = 3, isNew = false, onClick }: PolaroidProps) {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
 
   // Generate consistent but varied rotation based on photo id and index
@@ -72,6 +73,20 @@ export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidPr
             backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
           }}
         />
+
+        {/* NEW badge */}
+        {isNew && (
+          <motion.div
+            className="absolute -top-2 -right-2 z-20"
+            initial={{ scale: 0, rotate: -20 }}
+            animate={{ scale: 1, rotate: 12 }}
+            transition={{ type: "spring", stiffness: 300, damping: 15, delay: index * 0.05 }}
+          >
+            <div className="bg-gradient-to-r from-[#E8B4B8] to-[#F0C4C8] text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md">
+              NEW ✨
+            </div>
+          </motion.div>
+        )}
 
         {/* Photo container */}
         <div className="relative w-full aspect-square overflow-hidden bg-[#F0EDE8]">

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { Photo, Comment } from "@/lib/types";
 import { getCurrentUser, UserProfile } from "./PasswordGate";
+import LikeAnimation, { getRandomVariant } from "./LikeAnimation";
 
 interface CommentWithPhoto {
   comment: Comment;
@@ -20,6 +21,8 @@ interface CommentsFeedProps {
 export default function CommentsFeed({ photos, onPhotoClick, onPhotoUpdate }: CommentsFeedProps) {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [likingPhotoId, setLikingPhotoId] = useState<string | null>(null);
+  const [showLikeAnimation, setShowLikeAnimation] = useState<string | null>(null);
+  const [animationVariant, setAnimationVariant] = useState(0);
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
@@ -50,6 +53,14 @@ export default function CommentsFeed({ photos, onPhotoClick, onPhotoUpdate }: Co
     if (!currentUser || likingPhotoId === photo.id) return;
 
     setLikingPhotoId(photo.id);
+
+    // Show animation if we're liking (not unliking)
+    const userHasLiked = photo.likes?.some(like => like.userName === currentUser.name);
+    if (!userHasLiked) {
+      setAnimationVariant(getRandomVariant());
+      setShowLikeAnimation(photo.id);
+      setTimeout(() => setShowLikeAnimation(null), 1000);
+    }
 
     try {
       const response = await fetch(`/api/photos/${photo.id}`, {
@@ -154,6 +165,8 @@ export default function CommentsFeed({ photos, onPhotoClick, onPhotoUpdate }: Co
                       />
                       {/* Vintage overlay */}
                       <div className="absolute inset-0 bg-gradient-to-br from-amber-50/20 via-transparent to-rose-50/20 pointer-events-none" />
+                      {/* Like animation */}
+                      <LikeAnimation show={showLikeAnimation === photo.id} variant={animationVariant} />
                     </div>
 
                     {/* Comment content */}

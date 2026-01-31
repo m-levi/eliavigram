@@ -15,6 +15,7 @@ export interface UserProfile {
 
 const PASSWORD = "eat";
 const STORAGE_KEY = "eliavigram_user";
+const SEEN_PHOTOS_KEY = "eliavigram_seen_photos";
 
 export function getCurrentUser(): UserProfile | null {
   if (typeof window === "undefined") return null;
@@ -35,6 +36,42 @@ export function updateUserProfile(profile: Partial<UserProfile>): UserProfile | 
   const updated = { ...current, ...profile };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   return updated;
+}
+
+export function getSeenPhotos(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  const user = getCurrentUser();
+  if (!user) return new Set();
+
+  const stored = localStorage.getItem(`${SEEN_PHOTOS_KEY}_${user.name}`);
+  if (stored) {
+    try {
+      return new Set(JSON.parse(stored));
+    } catch {
+      return new Set();
+    }
+  }
+  return new Set();
+}
+
+export function markPhotoAsSeen(photoId: string): void {
+  if (typeof window === "undefined") return;
+  const user = getCurrentUser();
+  if (!user) return;
+
+  const seen = getSeenPhotos();
+  seen.add(photoId);
+  localStorage.setItem(`${SEEN_PHOTOS_KEY}_${user.name}`, JSON.stringify([...seen]));
+}
+
+export function markPhotosAsSeen(photoIds: string[]): void {
+  if (typeof window === "undefined") return;
+  const user = getCurrentUser();
+  if (!user) return;
+
+  const seen = getSeenPhotos();
+  photoIds.forEach(id => seen.add(id));
+  localStorage.setItem(`${SEEN_PHOTOS_KEY}_${user.name}`, JSON.stringify([...seen]));
 }
 
 export default function PasswordGate({ children }: PasswordGateProps) {
