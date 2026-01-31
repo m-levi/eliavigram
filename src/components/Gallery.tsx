@@ -6,7 +6,10 @@ import Polaroid from "./Polaroid";
 import PhotoUpload from "./PhotoUpload";
 import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
-import { Photo, Comment } from "@/lib/types";
+import CommentsFeed from "./CommentsFeed";
+import { Photo } from "@/lib/types";
+
+type TabType = "photos" | "comments";
 
 export default function Gallery() {
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -14,6 +17,7 @@ export default function Gallery() {
   const [showUpload, setShowUpload] = useState(false);
   const [gridSize, setGridSize] = useState<1 | 2 | 3>(3);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>("photos");
 
   const gridClasses = {
     1: "grid-cols-1 max-w-xl mx-auto gap-8",
@@ -67,20 +71,13 @@ export default function Gallery() {
     }
   };
 
-  const handleUpdateComment = async (id: string, comment: Comment) => {
-    try {
-      const response = await fetch(`/api/photos/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment }),
-      });
-      if (response.ok) {
-        setPhotos((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, comment, caption: comment.text } : p))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to update comment:", error);
+  const handlePhotoUpdate = (updatedPhoto: Photo) => {
+    setPhotos((prev) =>
+      prev.map((p) => (p.id === updatedPhoto.id ? updatedPhoto : p))
+    );
+    // Also update the selected photo if it's the same
+    if (selectedPhoto?.id === updatedPhoto.id) {
+      setSelectedPhoto(updatedPhoto);
     }
   };
 
@@ -119,10 +116,84 @@ export default function Gallery() {
     );
   }
 
+  // Count total comments
+  const totalComments = photos.reduce((acc, photo) => {
+    if (photo.comments && photo.comments.length > 0) {
+      return acc + photo.comments.length;
+    } else if (photo.comment) {
+      return acc + 1;
+    }
+    return acc;
+  }, 0);
+
   return (
     <div className="container mx-auto px-4 pb-16">
-      {/* Upload toggle button - only show when there are photos */}
+      {/* Tab navigation */}
       {photos.length > 0 && (
+        <motion.div
+          className="flex justify-center mb-8"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <div className="inline-flex bg-[#F5F0EB] rounded-full p-1 shadow-inner">
+            <motion.button
+              onClick={() => setActiveTab("photos")}
+              className={`relative px-6 py-2 rounded-full text-sm font-medium transition-colors ${
+                activeTab === "photos"
+                  ? "text-white"
+                  : "text-[#6B6B6B] hover:text-[#4A4A4A]"
+              }`}
+              whileHover={{ scale: activeTab === "photos" ? 1 : 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {activeTab === "photos" && (
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-[#4A6B8A] to-[#5A7B9A] rounded-full"
+                  layoutId="activeTab"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                📷 Photos
+              </span>
+            </motion.button>
+            <motion.button
+              onClick={() => setActiveTab("comments")}
+              className={`relative px-6 py-2 rounded-full text-sm font-medium transition-colors ${
+                activeTab === "comments"
+                  ? "text-white"
+                  : "text-[#6B6B6B] hover:text-[#4A4A4A]"
+              }`}
+              whileHover={{ scale: activeTab === "comments" ? 1 : 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {activeTab === "comments" && (
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-[#4A6B8A] to-[#5A7B9A] rounded-full"
+                  layoutId="activeTab"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                💬 Comments
+                {totalComments > 0 && (
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    activeTab === "comments"
+                      ? "bg-white/20"
+                      : "bg-[#4A6B8A]/10 text-[#4A6B8A]"
+                  }`}>
+                    {totalComments}
+                  </span>
+                )}
+              </span>
+            </motion.button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Upload toggle button - only show when on photos tab and there are photos */}
+      {photos.length > 0 && activeTab === "photos" && (
         <motion.div
           className="flex justify-center mb-10"
           initial={{ opacity: 0, y: -10 }}
@@ -160,7 +231,7 @@ export default function Gallery() {
         )}
       </AnimatePresence>
 
-      {/* Empty state or photo gallery */}
+      {/* Empty state or content based on tab */}
       {photos.length === 0 ? (
         <motion.div
           className="text-center py-16 max-w-md mx-auto"
@@ -190,6 +261,12 @@ export default function Gallery() {
             }}
           />
         </motion.div>
+      ) : activeTab === "comments" ? (
+        /* Comments Feed */
+        <CommentsFeed
+          photos={photos}
+          onPhotoClick={(photo) => setSelectedPhoto(photo)}
+        />
       ) : (
         <>
           {/* Controls bar */}
@@ -235,7 +312,7 @@ export default function Gallery() {
       <PhotoModal
         photo={selectedPhoto}
         onClose={() => setSelectedPhoto(null)}
-        onUpdateComment={handleUpdateComment}
+        onPhotoUpdate={handlePhotoUpdate}
         onDelete={handleDelete}
       />
 
