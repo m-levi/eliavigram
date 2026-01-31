@@ -11,6 +11,7 @@ interface StoriesProps {
   startIndex?: number;
   onClose: () => void;
   currentUserName?: string;
+  initialStoryIndex?: number;
 }
 
 const STORY_DURATION = 5000; // 5 seconds per story
@@ -74,10 +75,14 @@ export default function Stories({
   startIndex = 0,
   onClose,
   currentUserName,
+  initialStoryIndex,
 }: StoriesProps) {
   const [stories, setStories] = useState<StoryTheme[]>([]);
   const [isLoadingStories, setIsLoadingStories] = useState(true);
-  const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
+  const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(
+    initialStoryIndex !== undefined ? initialStoryIndex : null
+  );
+  const [pendingStoryIndex, setPendingStoryIndex] = useState<number | undefined>(initialStoryIndex);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -133,6 +138,15 @@ export default function Stories({
       })
       .finally(() => setIsLoadingStories(false));
   }, [photos]);
+
+  // Auto-start story when clicked from StoryBar
+  useEffect(() => {
+    if (!isLoadingStories && stories.length > 0 && pendingStoryIndex !== undefined) {
+      const validIndex = Math.min(pendingStoryIndex, stories.length - 1);
+      setActiveStoryIndex(validIndex);
+      setPendingStoryIndex(undefined);
+    }
+  }, [isLoadingStories, stories.length, pendingStoryIndex]);
 
   // Go to next photo/story
   const goNext = useCallback(() => {

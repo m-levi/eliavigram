@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import Polaroid from "./Polaroid";
-import PhotoUpload from "./PhotoUpload";
 import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
 import CommentsFeed from "./CommentsFeed";
+import StoryBar from "./StoryBar";
 import { getSeenPhotos, markPhotoAsSeen, getCurrentUser, UserProfile } from "./PasswordGate";
 import Stories from "./Stories";
 import { Photo } from "@/lib/types";
@@ -16,7 +17,6 @@ type TabType = "photos" | "comments";
 export default function Gallery() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showUpload, setShowUpload] = useState(false);
   const [gridSize, setGridSize] = useState<1 | 2 | 3>(3);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("photos");
@@ -24,6 +24,7 @@ export default function Gallery() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [likingPhotoId, setLikingPhotoId] = useState<string | null>(null);
   const [showStories, setShowStories] = useState(false);
+  const [initialStoryIndex, setInitialStoryIndex] = useState(0);
 
   const gridClasses = {
     1: "grid-cols-1 max-w-xl mx-auto gap-8",
@@ -137,6 +138,11 @@ export default function Gallery() {
     }
   };
 
+  const handleStoryClick = (storyIndex: number) => {
+    setInitialStoryIndex(storyIndex);
+    setShowStories(true);
+  };
+
   if (isLoading) {
     return (
       <motion.div
@@ -187,10 +193,15 @@ export default function Gallery() {
 
   return (
     <div className="container mx-auto px-4 pb-16">
+      {/* Story Bar - Instagram style circles at top */}
+      {photos.length > 0 && activeTab === "photos" && (
+        <StoryBar photos={photos} onStoryClick={handleStoryClick} />
+      )}
+
       {/* Tab navigation */}
       {photos.length > 0 && (
         <motion.div
-          className="flex justify-center mb-8"
+          className="flex justify-center mb-6"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -251,46 +262,7 @@ export default function Gallery() {
         </motion.div>
       )}
 
-      {/* Upload toggle button - only show when on photos tab and there are photos */}
-      {photos.length > 0 && activeTab === "photos" && (
-        <motion.div
-          className="flex justify-center mb-10"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <motion.button
-            onClick={() => setShowUpload(!showUpload)}
-            className="elegant-button-outline"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            {showUpload ? "Cancel" : "Add Photos"}
-          </motion.button>
-        </motion.div>
-      )}
-
-      {/* Upload area */}
-      <AnimatePresence>
-        {showUpload && (
-          <motion.div
-            className="max-w-xl mx-auto mb-14"
-            initial={{ opacity: 0, height: 0, y: -20 }}
-            animate={{ opacity: 1, height: "auto", y: 0 }}
-            exit={{ opacity: 0, height: 0, y: -20 }}
-            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-          >
-            <PhotoUpload
-              onUploadComplete={() => {
-                fetchPhotos();
-                setShowUpload(false);
-              }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Empty state or content based on tab */}
+      {/* Empty state */}
       {photos.length === 0 ? (
         <motion.div
           className="text-center py-16 max-w-md mx-auto"
@@ -314,11 +286,12 @@ export default function Gallery() {
           <p className="text-[#6B6B6B] mb-8">
             Add Eliav&apos;s first photo to start the scrapbook!
           </p>
-          <PhotoUpload
-            onUploadComplete={() => {
-              fetchPhotos();
-            }}
-          />
+          <Link
+            href="/add"
+            className="elegant-button inline-block"
+          >
+            Add Photos
+          </Link>
         </motion.div>
       ) : activeTab === "comments" ? (
         /* Comments Feed */
@@ -345,27 +318,13 @@ export default function Gallery() {
               {photos.length} {photos.length === 1 ? "precious moment" : "precious moments"}
               {unseenCount > 0 && (
                 <span className="ml-2 text-[#E8B4B8]">
-                  ({unseenCount} new ✨)
+                  ({unseenCount} new)
                 </span>
               )}
             </motion.p>
-            {/* Controls: Stories button and size picker */}
-            <div className="flex items-center gap-3">
-              {/* Stories/Slideshow button */}
-              <motion.button
-                onClick={() => setShowStories(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#E8B4B8] to-[#A8D8EA] text-[#2D2D2D] rounded-full text-sm font-medium shadow-sm"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <span>▶</span>
-                <span className="hidden sm:inline">Stories</span>
-              </motion.button>
-
-              {/* Hide size picker on mobile */}
-              <div className="hidden sm:block">
-                <SizeSlider value={gridSize} onChange={setGridSize} />
-              </div>
+            {/* Size picker - hide on mobile */}
+            <div className="hidden sm:block">
+              <SizeSlider value={gridSize} onChange={setGridSize} />
             </div>
           </motion.div>
 
@@ -419,6 +378,7 @@ export default function Gallery() {
             photos={photos}
             onClose={() => setShowStories(false)}
             currentUserName={currentUser?.name}
+            initialStoryIndex={initialStoryIndex}
           />
         )}
       </AnimatePresence>
