@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Photo } from "@/lib/types";
 import LikeAnimation, { getRandomVariant } from "./LikeAnimation";
 
@@ -35,6 +35,7 @@ export default function Polaroid({
 }: PolaroidProps) {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  const [showDoubleTapHeart, setShowDoubleTapHeart] = useState(false);
   const [animationVariant, setAnimationVariant] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTapRef = useRef<number>(0);
@@ -70,7 +71,7 @@ export default function Polaroid({
   }, [photo.id, onVisible]);
 
   // Handle like action
-  const handleLike = useCallback(async (e?: React.MouseEvent) => {
+  const handleLike = useCallback(async (e?: React.MouseEvent, isDoubleTap = false) => {
     if (e) {
       e.stopPropagation();
     }
@@ -81,6 +82,12 @@ export default function Polaroid({
       setAnimationVariant(getRandomVariant());
       setShowLikeAnimation(true);
       setTimeout(() => setShowLikeAnimation(false), 1000);
+
+      // Show big heart overlay on double-tap
+      if (isDoubleTap) {
+        setShowDoubleTapHeart(true);
+        setTimeout(() => setShowDoubleTapHeart(false), 800);
+      }
     }
 
     await onLike(photo);
@@ -94,7 +101,7 @@ export default function Polaroid({
     if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
       // Double tap detected - like the photo (only if not already liked)
       if (!userHasLiked && onLike && currentUserName) {
-        handleLike();
+        handleLike(undefined, true); // Pass isDoubleTap=true
       }
       lastTapRef.current = 0; // Reset to prevent triple-tap triggering
     } else {
@@ -248,6 +255,28 @@ export default function Polaroid({
 
           {/* Like animation overlay */}
           <LikeAnimation show={showLikeAnimation} variant={animationVariant} />
+
+          {/* Big heart overlay for double-tap */}
+          <AnimatePresence>
+            {showDoubleTapHeart && (
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <motion.span
+                  className="text-7xl drop-shadow-lg"
+                  initial={{ scale: 0, rotate: -15 }}
+                  animate={{ scale: [0, 1.4, 1], rotate: [0, 10, 0] }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                >
+                  ❤️
+                </motion.span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Comment area */}
@@ -263,36 +292,77 @@ export default function Polaroid({
           </p>
         </div>
 
-        {/* Like row - centered */}
+        {/* Like section */}
         {currentUserName && onLike && (
-          <div className="flex items-center justify-center gap-3 mt-2">
-            <motion.button
-              className="flex items-center gap-1.5"
-              onClick={handleLike}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              disabled={isLiking}
-            >
-              <motion.span
-                className="text-lg"
-                animate={userHasLiked ? { scale: [1, 1.3, 1] } : {}}
-                transition={{ duration: 0.3 }}
+          <div className="mt-2 px-1">
+            {/* Like button and comment count row */}
+            <div className="flex items-center justify-center gap-3">
+              <motion.button
+                className="flex items-center gap-1.5"
+                onClick={handleLike}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                disabled={isLiking}
               >
-                {userHasLiked ? "❤️" : "🤍"}
-              </motion.span>
-              {likesCount > 0 && (
-                <span className="text-xs text-[#6B6B6B]">
-                  {likesCount}
-                </span>
-              )}
-            </motion.button>
+                <motion.span
+                  className="text-lg"
+                  animate={userHasLiked ? { scale: [1, 1.3, 1] } : {}}
+                  transition={{ duration: 0.3 }}
+                >
+                  {userHasLiked ? "❤️" : "🤍"}
+                </motion.span>
+              </motion.button>
 
-            {/* Comment count */}
-            {(photo.comments?.length || 0) > 0 && (
-              <div className="flex items-center gap-1">
-                <span className="text-lg">💬</span>
-                <span className="text-xs text-[#6B6B6B]">
-                  {photo.comments?.length}
+              {/* Comment count */}
+              {(photo.comments?.length || 0) > 0 && (
+                <div className="flex items-center gap-1">
+                  <span className="text-lg">💬</span>
+                  <span className="text-xs text-[#6B6B6B]">
+                    {photo.comments?.length}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Liked by section with avatars */}
+            {likesCount > 0 && (
+              <div className="flex items-center justify-center gap-1.5 mt-1.5">
+                {/* Avatar stack */}
+                <div className="flex -space-x-2">
+                  {photo.likes?.slice(0, 3).map((like, i) => (
+                    <div
+                      key={like.userName}
+                      className="w-5 h-5 rounded-full border-2 border-white overflow-hidden bg-[#E8DDD4] flex items-center justify-center"
+                      style={{ zIndex: 3 - i }}
+                    >
+                      {like.userProfilePic ? (
+                        <Image
+                          src={like.userProfilePic}
+                          alt={like.userName}
+                          width={20}
+                          height={20}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <span className="text-[8px]">
+                          {like.userName.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Liked by text */}
+                <span className="text-[10px] text-[#6B6B6B]">
+                  {userHasLiked ? (
+                    likesCount === 1 ? (
+                      "Liked by you"
+                    ) : (
+                      <>Liked by you {likesCount > 1 && `+ ${likesCount - 1}`}</>
+                    )
+                  ) : (
+                    `${likesCount} ${likesCount === 1 ? "like" : "likes"}`
+                  )}
                 </span>
               </div>
             )}
