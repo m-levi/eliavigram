@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Photo } from "@/lib/types";
+import LikeAnimation, { getRandomVariant } from "./LikeAnimation";
 
 interface PolaroidProps {
   photo: Photo;
@@ -11,10 +12,101 @@ interface PolaroidProps {
   size?: 1 | 2 | 3;
   isNew?: boolean;
   onClick?: () => void;
+  // Like functionality
+  currentUserName?: string;
+  currentUserProfilePic?: string;
+  onLike?: (photo: Photo) => Promise<void>;
+  isLiking?: boolean;
+  // Seen tracking
+  onVisible?: (photoId: string) => void;
 }
 
-export default function Polaroid({ photo, index, size = 3, isNew = false, onClick }: PolaroidProps) {
+export default function Polaroid({
+  photo,
+  index,
+  size = 3,
+  isNew = false,
+  onClick,
+  currentUserName,
+  currentUserProfilePic,
+  onLike,
+  isLiking = false,
+  onVisible,
+}: PolaroidProps) {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  const [animationVariant, setAnimationVariant] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastTapRef = useRef<number>(0);
+  const hasBeenVisible = useRef(false);
+
+  // Check if current user has liked this photo
+  const userHasLiked = currentUserName
+    ? photo.likes?.some(like => like.userName === currentUserName) || false
+    : false;
+  const likesCount = photo.likes?.length || 0;
+
+  // IntersectionObserver to track when photo becomes visible
+  useEffect(() => {
+    if (!onVisible || hasBeenVisible.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !hasBeenVisible.current) {
+            hasBeenVisible.current = true;
+            onVisible(photo.id);
+          }
+        });
+      },
+      { threshold: 0.5 } // 50% of the photo must be visible
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [photo.id, onVisible]);
+
+  // Handle like action
+  const handleLike = useCallback(async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    if (!onLike || isLiking || !currentUserName) return;
+
+    // Show animation only if we're liking (not unliking)
+    if (!userHasLiked) {
+      setAnimationVariant(getRandomVariant());
+      setShowLikeAnimation(true);
+      setTimeout(() => setShowLikeAnimation(false), 1000);
+    }
+
+    await onLike(photo);
+  }, [onLike, isLiking, currentUserName, userHasLiked, photo]);
+
+  // Handle double tap to like
+  const handleTap = useCallback(() => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected - like the photo (only if not already liked)
+      if (!userHasLiked && onLike && currentUserName) {
+        handleLike();
+      }
+      lastTapRef.current = 0; // Reset to prevent triple-tap triggering
+    } else {
+      lastTapRef.current = now;
+      // Single tap - open modal after a short delay (to check for double tap)
+      setTimeout(() => {
+        if (lastTapRef.current === now && onClick) {
+          onClick();
+        }
+      }, DOUBLE_TAP_DELAY);
+    }
+  }, [userHasLiked, onLike, currentUserName, handleLike, onClick]);
 
   // Generate consistent but varied rotation based on photo id and index
   const rotation = useMemo(() => {
@@ -35,6 +127,7 @@ export default function Polaroid({ photo, index, size = 3, isNew = false, onClic
 
   return (
     <motion.div
+      ref={containerRef}
       className="polaroid-container relative"
       layout
       initial={{ opacity: 0, y: 30, rotate: rotation * 1.5, scale: 0.95 }}
@@ -60,7 +153,7 @@ export default function Polaroid({ photo, index, size = 3, isNew = false, onClic
         zIndex: 10,
         transition: { duration: 0.25, ease: "easeOut" },
       }}
-      onClick={onClick}
+      onClick={handleTap}
     >
       <motion.div
         className="polaroid cursor-pointer relative"
@@ -152,6 +245,9 @@ export default function Polaroid({ photo, index, size = 3, isNew = false, onClic
 
           {/* Vintage overlay */}
           <div className="absolute inset-0 bg-gradient-to-br from-amber-50/10 via-transparent to-rose-50/10 pointer-events-none" />
+
+          {/* Like animation overlay */}
+          <LikeAnimation show={showLikeAnimation} variant={animationVariant} />
         </div>
 
         {/* Comment area */}
@@ -167,14 +263,43 @@ export default function Polaroid({ photo, index, size = 3, isNew = false, onClic
           </p>
         </div>
 
-        {/* Date */}
-        <p className="text-[10px] text-[#A0A0A0] text-center mt-1 font-sans tracking-wider uppercase">
-          {new Date(photo.uploadedAt).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          })}
-        </p>
+        {/* Date and Like row */}
+        <div className="flex items-center justify-between mt-1 px-1">
+          <p className="text-[10px] text-[#A0A0A0] font-sans tracking-wider uppercase">
+            {new Date(photo.uploadedAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </p>
+
+          {/* Like button */}
+          {currentUserName && onLike && (
+            <div className="flex items-center gap-1">
+              <motion.button
+                className={`text-base transition-colors ${
+                  userHasLiked ? "text-red-500" : "text-gray-300 hover:text-red-400"
+                }`}
+                onClick={handleLike}
+                whileHover={{ scale: 1.2 }}
+                whileTap={{ scale: 0.9 }}
+                disabled={isLiking}
+              >
+                <motion.span
+                  animate={userHasLiked ? { scale: [1, 1.3, 1] } : {}}
+                  transition={{ duration: 0.3 }}
+                >
+                  {userHasLiked ? "❤️" : "🤍"}
+                </motion.span>
+              </motion.button>
+              {likesCount > 0 && (
+                <span className="text-[10px] text-[#A0A0A0]">
+                  {likesCount}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   );

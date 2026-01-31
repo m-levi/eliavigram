@@ -7,7 +7,7 @@ import PhotoUpload from "./PhotoUpload";
 import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
 import CommentsFeed from "./CommentsFeed";
-import { getSeenPhotos, markPhotoAsSeen } from "./PasswordGate";
+import { getSeenPhotos, markPhotoAsSeen, getCurrentUser, UserProfile } from "./PasswordGate";
 import { Photo } from "@/lib/types";
 
 type TabType = "photos" | "comments";
@@ -20,6 +20,8 @@ export default function Gallery() {
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("photos");
   const [seenPhotos, setSeenPhotos] = useState<Set<string>>(new Set());
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [likingPhotoId, setLikingPhotoId] = useState<string | null>(null);
 
   const gridClasses = {
     1: "grid-cols-1 max-w-xl mx-auto gap-8",
@@ -71,7 +73,44 @@ export default function Gallery() {
 
   useEffect(() => {
     fetchPhotos();
+    setCurrentUser(getCurrentUser());
   }, [fetchPhotos]);
+
+  // Handle like action from Polaroid
+  const handleLikePhoto = useCallback(async (photo: Photo) => {
+    if (!currentUser || likingPhotoId === photo.id) return;
+
+    setLikingPhotoId(photo.id);
+
+    try {
+      const response = await fetch(`/api/photos/${photo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle_like",
+          userName: currentUser.name,
+          userProfilePic: currentUser.profilePicUrl,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        handlePhotoUpdate(data.photo);
+      }
+    } catch (error) {
+      console.error("Failed to toggle like:", error);
+    } finally {
+      setLikingPhotoId(null);
+    }
+  }, [currentUser, likingPhotoId]);
+
+  // Handle photo becoming visible in viewport
+  const handlePhotoVisible = useCallback((photoId: string) => {
+    if (!seenPhotos.has(photoId)) {
+      markPhotoAsSeen(photoId);
+      setSeenPhotos(prev => new Set([...prev, photoId]));
+    }
+  }, [seenPhotos]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -329,6 +368,11 @@ export default function Gallery() {
                   size={gridSize}
                   isNew={!seenPhotos.has(photo.id)}
                   onClick={() => setSelectedPhoto(photo)}
+                  currentUserName={currentUser?.name}
+                  currentUserProfilePic={currentUser?.profilePicUrl}
+                  onLike={handleLikePhoto}
+                  isLiking={likingPhotoId === photo.id}
+                  onVisible={handlePhotoVisible}
                 />
               ))}
             </AnimatePresence>
