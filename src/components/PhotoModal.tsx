@@ -28,6 +28,9 @@ export default function PhotoModal({
   const [isLiking, setIsLiking] = useState(false);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
   const [animationVariant, setAnimationVariant] = useState(0);
+  const [similarPhotos, setSimilarPhotos] = useState<(Photo & { similarityScore: number })[]>([]);
+  const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+  const [similarKeywords, setSimilarKeywords] = useState<string[]>([]);
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
@@ -37,7 +40,22 @@ export default function PhotoModal({
     if (photo) {
       setNewCommentText("");
       setIsImageLoaded(false);
+      setSimilarPhotos([]);
+      setSimilarKeywords([]);
       document.body.style.overflow = "hidden";
+
+      // Fetch similar photos
+      if (photo.mediaType !== "video") {
+        setIsLoadingSimilar(true);
+        fetch(`/api/photos/${photo.id}/similar`)
+          .then((res) => res.json())
+          .then((data) => {
+            setSimilarPhotos(data.similar || []);
+            setSimilarKeywords(data.keywords || []);
+          })
+          .catch(console.error)
+          .finally(() => setIsLoadingSimilar(false));
+      }
     } else {
       document.body.style.overflow = "unset";
     }
@@ -364,6 +382,73 @@ export default function PhotoModal({
                     </div>
                   )}
                 </div>
+
+                {/* Similar Photos Section */}
+                {photo.mediaType !== "video" && (
+                  <div className="pt-3 border-t border-[#F0F0F0]">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-sm font-medium text-[#4A4A4A]">✨ Similar Photos</span>
+                      {similarKeywords.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {similarKeywords.slice(0, 4).map((keyword) => (
+                            <span
+                              key={keyword}
+                              className="text-[10px] px-2 py-0.5 bg-[#F5F0EB] text-[#6B6B6B] rounded-full"
+                            >
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {isLoadingSimilar ? (
+                      <div className="flex items-center justify-center py-4">
+                        <motion.div
+                          className="text-2xl"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        >
+                          🔍
+                        </motion.div>
+                        <span className="ml-2 text-sm text-[#A0A0A0]">Finding similar photos...</span>
+                      </div>
+                    ) : similarPhotos.length > 0 ? (
+                      <div className="grid grid-cols-4 gap-2">
+                        {similarPhotos.map((similarPhoto) => (
+                          <motion.div
+                            key={similarPhoto.id}
+                            className="relative aspect-square rounded-md overflow-hidden cursor-pointer group"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => {
+                              // Update the current photo to show the similar one
+                              onPhotoUpdate(similarPhoto);
+                            }}
+                          >
+                            <Image
+                              src={similarPhoto.imageUrl}
+                              alt={similarPhoto.caption || "Similar photo"}
+                              fill
+                              className="object-cover"
+                              sizes="100px"
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1">
+                              <span className="text-[10px] text-white font-medium">
+                                {similarPhoto.similarityScore}% match
+                              </span>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#A0A0A0] text-center py-2">
+                        No similar photos found
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex justify-between items-center pt-3 border-t border-[#F0F0F0]">

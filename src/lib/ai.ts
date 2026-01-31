@@ -70,3 +70,67 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onerror = (error) => reject(error);
   });
 }
+
+/**
+ * Analyze a photo and return keywords/tags for similarity matching
+ */
+export async function analyzePhotoForSimilarity(
+  imageBase64: string,
+  mimeType: string
+): Promise<string[]> {
+  try {
+    const geminiModel = await getGeminiModel();
+
+    const prompt = `Analyze this photo and return a JSON array of 5-8 keywords that describe:
+- The main subject (person, object, animal)
+- The activity or action happening
+- The setting or location
+- The mood or emotion
+- Colors or visual elements
+
+Return ONLY a valid JSON array of lowercase strings, nothing else.
+Example: ["baby", "playing", "outdoors", "happy", "green", "grass", "sunny"]`;
+
+    const result = await geminiModel.generateContent([
+      prompt,
+      {
+        inlineData: {
+          mimeType,
+          data: imageBase64,
+        },
+      },
+    ]);
+
+    const response = result.response;
+    const text = response.text().trim();
+
+    // Parse the JSON array
+    const keywords = JSON.parse(text);
+    return Array.isArray(keywords) ? keywords : [];
+  } catch (error) {
+    console.error("Failed to analyze photo:", error);
+    return [];
+  }
+}
+
+/**
+ * Find similar photos by comparing keywords
+ */
+export function calculateSimilarityScore(
+  keywords1: string[],
+  keywords2: string[]
+): number {
+  if (!keywords1.length || !keywords2.length) return 0;
+
+  const set1 = new Set(keywords1.map((k) => k.toLowerCase()));
+  const set2 = new Set(keywords2.map((k) => k.toLowerCase()));
+
+  let matches = 0;
+  set1.forEach((keyword) => {
+    if (set2.has(keyword)) matches++;
+  });
+
+  // Jaccard similarity
+  const union = new Set([...set1, ...set2]);
+  return matches / union.size;
+}
