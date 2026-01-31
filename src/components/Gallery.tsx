@@ -266,6 +266,7 @@ export default function Gallery() {
         <CommentsFeed
           photos={photos}
           onPhotoClick={(photo) => setSelectedPhoto(photo)}
+          onPhotoUpdate={handlePhotoUpdate}
         />
       ) : (
         <>
