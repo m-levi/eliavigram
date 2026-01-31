@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { savePhoto, uploadImageToStorage, checkDuplicatePhoto } from "@/lib/storage";
-import { Photo } from "@/lib/types";
+import { Photo, MediaType } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,13 +15,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate it's an image
-    if (!file.type.startsWith("image/")) {
+    // Validate it's an image or video
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    if (!isImage && !isVideo) {
       return NextResponse.json(
-        { error: "File must be an image" },
+        { error: "File must be an image or video" },
         { status: 400 }
       );
     }
+
+    const mediaType: MediaType = isVideo ? "video" : "image";
 
     // Check for duplicate photo
     const isDuplicate = await checkDuplicatePhoto(file.name);
@@ -50,6 +54,7 @@ export async function POST(request: NextRequest) {
       uploadedAt: new Date().toISOString(),
       rotation,
       imageUrl,
+      mediaType,
     };
 
     await savePhoto(photo);

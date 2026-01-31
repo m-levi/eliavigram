@@ -59,6 +59,7 @@ export async function savePhoto(photo: Photo): Promise<void> {
     uploadedAt: photo.uploadedAt,
     rotation: photo.rotation,
     imageUrl: photo.imageUrl,
+    mediaType: photo.mediaType || "image",
   });
 }
 

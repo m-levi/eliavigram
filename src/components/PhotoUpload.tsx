@@ -25,13 +25,13 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
 
   const uploadFiles = async (files: FileList) => {
     setIsUploading(true);
-    const imageFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
-    const totalFiles = imageFiles.length;
+    const mediaFiles = Array.from(files).filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
+    const totalFiles = mediaFiles.length;
     let uploadedCount = 0;
     let skippedCount = 0;
 
-    for (let i = 0; i < imageFiles.length; i++) {
-      const file = imageFiles[i];
+    for (let i = 0; i < mediaFiles.length; i++) {
+      const file = mediaFiles[i];
       setUploadProgress(`Processing ${i + 1} of ${totalFiles}...`);
 
       const formData = new FormData();
@@ -104,7 +104,7 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         multiple
         onChange={handleFileSelect}
         className="hidden"
@@ -137,7 +137,7 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
           </motion.div>
           <div className="space-y-1 text-center">
             <p className="font-serif text-lg text-[#2D2D2D]">
-              {isDragging ? "Drop it like it's hot! 🔥" : "Drop photos here"}
+              {isDragging ? "Drop it like it's hot! 🔥" : "Drop photos or videos here"}
             </p>
             <p className="text-sm text-[#A0A0A0]">
               or click to browse

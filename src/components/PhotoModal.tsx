@@ -177,7 +177,7 @@ export default function PhotoModal({
                 x
               </motion.button>
 
-              {/* Image container */}
+              {/* Image/Video container */}
               <div className="relative aspect-square w-full overflow-hidden bg-[#F0EDE8] rounded-sm">
                 {/* Loading indicator */}
                 {!isImageLoaded && (
@@ -194,23 +194,37 @@ export default function PhotoModal({
                         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                       />
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xl">📷</span>
+                        <span className="text-xl">{photo.mediaType === "video" ? "🎬" : "📷"}</span>
                       </div>
                     </motion.div>
                   </div>
                 )}
 
-                <Image
-                  src={photo.imageUrl}
-                  alt={photo.comment?.text || photo.caption || "Photo by Eliav"}
-                  fill
-                  className={`object-cover transition-opacity duration-300 ${
-                    isImageLoaded ? "opacity-100" : "opacity-0"
-                  }`}
-                  sizes="(max-width: 768px) 100vw, 700px"
-                  priority
-                  onLoad={() => setIsImageLoaded(true)}
-                />
+                {photo.mediaType === "video" ? (
+                  <video
+                    src={photo.imageUrl}
+                    className={`object-cover w-full h-full transition-opacity duration-300 ${
+                      isImageLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    controls
+                    autoPlay
+                    loop
+                    playsInline
+                    onLoadedData={() => setIsImageLoaded(true)}
+                  />
+                ) : (
+                  <Image
+                    src={photo.imageUrl}
+                    alt={photo.comment?.text || photo.caption || "Photo by Eliav"}
+                    fill
+                    className={`object-cover transition-opacity duration-300 ${
+                      isImageLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    sizes="(max-width: 768px) 100vw, 700px"
+                    priority
+                    onLoad={() => setIsImageLoaded(true)}
+                  />
+                )}
 
                 {/* Like animation overlay */}
                 <LikeAnimation show={showLikeAnimation} variant={animationVariant} />

@@ -88,7 +88,7 @@ export default function Polaroid({ photo, index, size = 3, isNew = false, onClic
           </motion.div>
         )}
 
-        {/* Photo container */}
+        {/* Photo/Video container */}
         <div className="relative w-full aspect-square overflow-hidden bg-[#F0EDE8]">
           {/* Loading shimmer */}
           {!isImageLoaded && (
@@ -108,23 +108,47 @@ export default function Polaroid({ photo, index, size = 3, isNew = false, onClic
             />
           )}
 
-          <Image
-            src={photo.imageUrl}
-            alt={photo.caption || "Photo by Eliav"}
-            fill
-            className={`object-cover transition-opacity duration-300 ${
-              isImageLoaded ? "opacity-100" : "opacity-0"
-            }`}
-            sizes={
-              size === 1
-                ? "(max-width: 768px) 100vw, 600px"
-                : size === 2
-                ? "(max-width: 768px) 100vw, 50vw"
-                : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            }
-            loading={index < 6 ? "eager" : "lazy"}
-            onLoad={() => setIsImageLoaded(true)}
-          />
+          {photo.mediaType === "video" ? (
+            <>
+              <video
+                src={photo.imageUrl}
+                className={`object-cover w-full h-full transition-opacity duration-300 ${
+                  isImageLoaded ? "opacity-100" : "opacity-0"
+                }`}
+                muted
+                playsInline
+                preload="metadata"
+                onLoadedData={() => setIsImageLoaded(true)}
+              />
+              {/* Video play button overlay */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <motion.div
+                  className="w-12 h-12 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm"
+                  whileHover={{ scale: 1.1 }}
+                >
+                  <div className="w-0 h-0 border-l-[16px] border-l-white border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent ml-1" />
+                </motion.div>
+              </div>
+            </>
+          ) : (
+            <Image
+              src={photo.imageUrl}
+              alt={photo.caption || "Photo by Eliav"}
+              fill
+              className={`object-cover transition-opacity duration-300 ${
+                isImageLoaded ? "opacity-100" : "opacity-0"
+              }`}
+              sizes={
+                size === 1
+                  ? "(max-width: 768px) 100vw, 600px"
+                  : size === 2
+                  ? "(max-width: 768px) 100vw, 50vw"
+                  : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              }
+              loading={index < 6 ? "eager" : "lazy"}
+              onLoad={() => setIsImageLoaded(true)}
+            />
+          )}
 
           {/* Vintage overlay */}
           <div className="absolute inset-0 bg-gradient-to-br from-amber-50/10 via-transparent to-rose-50/10 pointer-events-none" />
