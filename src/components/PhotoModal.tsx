@@ -13,6 +13,7 @@ interface PhotoModalProps {
   onClose: () => void;
   onPhotoUpdate: (photo: Photo) => void;
   onDelete: (id: string) => void;
+  onSelectPhoto?: (photo: Photo) => void;
 }
 
 export default function PhotoModal({
@@ -20,6 +21,7 @@ export default function PhotoModal({
   onClose,
   onPhotoUpdate,
   onDelete,
+  onSelectPhoto,
 }: PhotoModalProps) {
   const [newCommentText, setNewCommentText] = useState("");
   const [isImageLoaded, setIsImageLoaded] = useState(false);
@@ -241,6 +243,7 @@ export default function PhotoModal({
                     sizes="(max-width: 768px) 100vw, 700px"
                     priority
                     onLoad={() => setIsImageLoaded(true)}
+                    onError={() => setIsImageLoaded(true)}
                   />
                 )}
 
@@ -422,8 +425,10 @@ export default function PhotoModal({
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => {
-                              // Update the current photo to show the similar one
-                              onPhotoUpdate(similarPhoto);
+                              // Navigate to the similar photo
+                              if (onSelectPhoto) {
+                                onSelectPhoto(similarPhoto);
+                              }
                             }}
                           >
                             <Image
