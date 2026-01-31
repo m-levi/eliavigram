@@ -7,6 +7,7 @@ import PhotoUpload from "./PhotoUpload";
 import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
 import CommentsFeed from "./CommentsFeed";
+import { getSeenPhotos, markPhotoAsSeen } from "./PasswordGate";
 import { Photo } from "@/lib/types";
 
 type TabType = "photos" | "comments";
@@ -18,6 +19,7 @@ export default function Gallery() {
   const [gridSize, setGridSize] = useState<1 | 2 | 3>(3);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("photos");
+  const [seenPhotos, setSeenPhotos] = useState<Set<string>>(new Set());
 
   const gridClasses = {
     1: "grid-cols-1 max-w-xl mx-auto gap-8",
@@ -40,8 +42,21 @@ export default function Gallery() {
       const response = await fetch("/api/photos");
       const data = await response.json();
       if (Array.isArray(data)) {
-        // Shuffle photos for a fresh experience each time
-        setPhotos(shuffleArray(data));
+        // Get seen photos for sorting
+        const seen = getSeenPhotos();
+        setSeenPhotos(seen);
+
+        // Sort photos: unseen first (shuffled), then seen (shuffled)
+        const unseenPhotos = data.filter((p: Photo) => !seen.has(p.id));
+        const seenPhotosList = data.filter((p: Photo) => seen.has(p.id));
+
+        // Shuffle both groups separately, then combine
+        const sortedPhotos = [
+          ...shuffleArray(unseenPhotos),
+          ...shuffleArray(seenPhotosList),
+        ];
+
+        setPhotos(sortedPhotos);
       } else {
         console.error("API returned non-array:", data);
         setPhotos([]);
@@ -125,6 +140,9 @@ export default function Gallery() {
     }
     return acc;
   }, 0);
+
+  // Count unseen photos
+  const unseenCount = photos.filter(p => !seenPhotos.has(p.id)).length;
 
   return (
     <div className="container mx-auto px-4 pb-16">
@@ -266,6 +284,7 @@ export default function Gallery() {
         <CommentsFeed
           photos={photos}
           onPhotoClick={(photo) => setSelectedPhoto(photo)}
+          onPhotoUpdate={handlePhotoUpdate}
         />
       ) : (
         <>
@@ -282,9 +301,17 @@ export default function Gallery() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
             >
-              {photos.length} {photos.length === 1 ? "precious moment" : "precious moments"} ✨
+              {photos.length} {photos.length === 1 ? "precious moment" : "precious moments"}
+              {unseenCount > 0 && (
+                <span className="ml-2 text-[#E8B4B8]">
+                  ({unseenCount} new ✨)
+                </span>
+              )}
             </motion.p>
-            <SizeSlider value={gridSize} onChange={setGridSize} />
+            {/* Hide size picker on mobile */}
+            <div className="hidden sm:block">
+              <SizeSlider value={gridSize} onChange={setGridSize} />
+            </div>
           </motion.div>
 
           {/* Photo grid */}
@@ -300,6 +327,7 @@ export default function Gallery() {
                   photo={photo}
                   index={index}
                   size={gridSize}
+                  isNew={!seenPhotos.has(photo.id)}
                   onClick={() => setSelectedPhoto(photo)}
                 />
               ))}
@@ -311,7 +339,14 @@ export default function Gallery() {
       {/* Photo Modal */}
       <PhotoModal
         photo={selectedPhoto}
-        onClose={() => setSelectedPhoto(null)}
+        onClose={() => {
+          // Mark photo as seen when closing modal
+          if (selectedPhoto && !seenPhotos.has(selectedPhoto.id)) {
+            markPhotoAsSeen(selectedPhoto.id);
+            setSeenPhotos(prev => new Set([...prev, selectedPhoto.id]));
+          }
+          setSelectedPhoto(null);
+        }}
         onPhotoUpdate={handlePhotoUpdate}
         onDelete={handleDelete}
       />

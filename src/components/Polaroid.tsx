@@ -9,10 +9,11 @@ interface PolaroidProps {
   photo: Photo;
   index: number;
   size?: 1 | 2 | 3;
+  isNew?: boolean;
   onClick?: () => void;
 }
 
-export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidProps) {
+export default function Polaroid({ photo, index, size = 3, isNew = false, onClick }: PolaroidProps) {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
 
   // Generate consistent but varied rotation based on photo id and index
@@ -73,7 +74,21 @@ export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidPr
           }}
         />
 
-        {/* Photo container */}
+        {/* NEW badge */}
+        {isNew && (
+          <motion.div
+            className="absolute -top-2 -right-2 z-20"
+            initial={{ scale: 0, rotate: -20 }}
+            animate={{ scale: 1, rotate: 12 }}
+            transition={{ type: "spring", stiffness: 300, damping: 15, delay: index * 0.05 }}
+          >
+            <div className="bg-gradient-to-r from-[#E8B4B8] to-[#F0C4C8] text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md">
+              NEW ✨
+            </div>
+          </motion.div>
+        )}
+
+        {/* Photo/Video container */}
         <div className="relative w-full aspect-square overflow-hidden bg-[#F0EDE8]">
           {/* Loading shimmer */}
           {!isImageLoaded && (
@@ -93,23 +108,47 @@ export default function Polaroid({ photo, index, size = 3, onClick }: PolaroidPr
             />
           )}
 
-          <Image
-            src={photo.imageUrl}
-            alt={photo.caption || "Photo by Eliav"}
-            fill
-            className={`object-cover transition-opacity duration-300 ${
-              isImageLoaded ? "opacity-100" : "opacity-0"
-            }`}
-            sizes={
-              size === 1
-                ? "(max-width: 768px) 100vw, 600px"
-                : size === 2
-                ? "(max-width: 768px) 100vw, 50vw"
-                : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            }
-            loading={index < 6 ? "eager" : "lazy"}
-            onLoad={() => setIsImageLoaded(true)}
-          />
+          {photo.mediaType === "video" ? (
+            <>
+              <video
+                src={photo.imageUrl}
+                className={`object-cover w-full h-full transition-opacity duration-300 ${
+                  isImageLoaded ? "opacity-100" : "opacity-0"
+                }`}
+                muted
+                playsInline
+                preload="metadata"
+                onLoadedData={() => setIsImageLoaded(true)}
+              />
+              {/* Video play button overlay */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <motion.div
+                  className="w-12 h-12 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm"
+                  whileHover={{ scale: 1.1 }}
+                >
+                  <div className="w-0 h-0 border-l-[16px] border-l-white border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent ml-1" />
+                </motion.div>
+              </div>
+            </>
+          ) : (
+            <Image
+              src={photo.imageUrl}
+              alt={photo.caption || "Photo by Eliav"}
+              fill
+              className={`object-cover transition-opacity duration-300 ${
+                isImageLoaded ? "opacity-100" : "opacity-0"
+              }`}
+              sizes={
+                size === 1
+                  ? "(max-width: 768px) 100vw, 600px"
+                  : size === 2
+                  ? "(max-width: 768px) 100vw, 50vw"
+                  : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              }
+              loading={index < 6 ? "eager" : "lazy"}
+              onLoad={() => setIsImageLoaded(true)}
+            />
+          )}
 
           {/* Vintage overlay */}
           <div className="absolute inset-0 bg-gradient-to-br from-amber-50/10 via-transparent to-rose-50/10 pointer-events-none" />

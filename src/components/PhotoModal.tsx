@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Photo, Comment } from "@/lib/types";
 import { getCurrentUser, UserProfile } from "./PasswordGate";
+import LikeAnimation, { getRandomVariant } from "./LikeAnimation";
 import { v4 as uuidv4 } from "uuid";
 
 interface PhotoModalProps {
@@ -26,6 +27,7 @@ export default function PhotoModal({
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isLiking, setIsLiking] = useState(false);
   const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  const [animationVariant, setAnimationVariant] = useState(0);
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
@@ -91,8 +93,9 @@ export default function PhotoModal({
     // Show animation if we're liking (not unliking)
     const userHasLiked = photo.likes?.some(like => like.userName === currentUser.name);
     if (!userHasLiked) {
+      setAnimationVariant(getRandomVariant());
       setShowLikeAnimation(true);
-      setTimeout(() => setShowLikeAnimation(false), 800);
+      setTimeout(() => setShowLikeAnimation(false), 1000);
     }
 
     try {
@@ -174,7 +177,7 @@ export default function PhotoModal({
                 x
               </motion.button>
 
-              {/* Image container */}
+              {/* Image/Video container */}
               <div className="relative aspect-square w-full overflow-hidden bg-[#F0EDE8] rounded-sm">
                 {/* Loading indicator */}
                 {!isImageLoaded && (
@@ -191,45 +194,40 @@ export default function PhotoModal({
                         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                       />
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xl">📷</span>
+                        <span className="text-xl">{photo.mediaType === "video" ? "🎬" : "📷"}</span>
                       </div>
                     </motion.div>
                   </div>
                 )}
 
-                <Image
-                  src={photo.imageUrl}
-                  alt={photo.comment?.text || photo.caption || "Photo by Eliav"}
-                  fill
-                  className={`object-cover transition-opacity duration-300 ${
-                    isImageLoaded ? "opacity-100" : "opacity-0"
-                  }`}
-                  sizes="(max-width: 768px) 100vw, 700px"
-                  priority
-                  onLoad={() => setIsImageLoaded(true)}
-                />
+                {photo.mediaType === "video" ? (
+                  <video
+                    src={photo.imageUrl}
+                    className={`object-cover w-full h-full transition-opacity duration-300 ${
+                      isImageLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    controls
+                    autoPlay
+                    loop
+                    playsInline
+                    onLoadedData={() => setIsImageLoaded(true)}
+                  />
+                ) : (
+                  <Image
+                    src={photo.imageUrl}
+                    alt={photo.comment?.text || photo.caption || "Photo by Eliav"}
+                    fill
+                    className={`object-cover transition-opacity duration-300 ${
+                      isImageLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    sizes="(max-width: 768px) 100vw, 700px"
+                    priority
+                    onLoad={() => setIsImageLoaded(true)}
+                  />
+                )}
 
                 {/* Like animation overlay */}
-                <AnimatePresence>
-                  {showLikeAnimation && (
-                    <motion.div
-                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                      initial={{ opacity: 0, scale: 0 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0 }}
-                    >
-                      <motion.span
-                        className="text-8xl drop-shadow-lg"
-                        initial={{ scale: 0 }}
-                        animate={{ scale: [0, 1.5, 1] }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{ duration: 0.5 }}
-                      >
-                        ❤️
-                      </motion.span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                <LikeAnimation show={showLikeAnimation} variant={animationVariant} />
 
                 {/* Vintage overlay */}
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-50/10 via-transparent to-rose-50/10 pointer-events-none" />

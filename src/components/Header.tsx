@@ -1,8 +1,24 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import Image from "next/image";
+import { getCurrentUser, UserProfile } from "./PasswordGate";
 
 export default function Header() {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
+
+  const handleLogout = () => {
+    if (confirm("Switch to a different account?")) {
+      localStorage.removeItem("eliavigram_user");
+      window.location.reload();
+    }
+  };
+
   return (
     <header className="relative overflow-hidden">
       {/* Skeuomorphic leather banner - Instagram vintage style */}
@@ -87,6 +103,47 @@ export default function Header() {
         >
           A little photographer&apos;s gallery
         </motion.p>
+
+        {/* User greeting */}
+        {currentUser && (
+          <motion.div
+            className="mt-4 flex items-center justify-center gap-3"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.4, duration: 0.4 }}
+          >
+            <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm px-4 py-2 rounded-full shadow-sm border border-[#E8DDD4]">
+              {/* Profile pic */}
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#E8B4B8] to-[#A8D8EA] flex items-center justify-center overflow-hidden">
+                {currentUser.profilePicUrl ? (
+                  <Image
+                    src={currentUser.profilePicUrl}
+                    alt={currentUser.name}
+                    width={28}
+                    height={28}
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  <span className="text-xs font-medium text-white">
+                    {currentUser.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <span className="text-sm text-[#4A4A4A]">
+                Hi, <span className="font-medium">{currentUser.name}</span>!
+              </span>
+              <motion.button
+                onClick={handleLogout}
+                className="ml-1 text-xs text-[#A0A0A0] hover:text-[#6B6B6B] transition-colors"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                title="Switch account"
+              >
+                👋
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
 
         <motion.div
           className="mt-4 flex items-center justify-center gap-2"

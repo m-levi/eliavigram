@@ -12,6 +12,8 @@ export interface Like {
   createdAt: string;
 }
 
+export type MediaType = "image" | "video";
+
 export interface Photo {
   id: string;
   filename: string;
@@ -23,6 +25,7 @@ export interface Photo {
   uploadedAt: string;
   rotation: number;
   imageUrl: string;
+  mediaType?: MediaType; // Optional for backward compatibility (defaults to "image")
 }
 
 export interface UserProfile {
