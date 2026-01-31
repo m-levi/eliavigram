@@ -8,6 +8,7 @@ import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
 import CommentsFeed from "./CommentsFeed";
 import { getSeenPhotos, markPhotoAsSeen, getCurrentUser, UserProfile } from "./PasswordGate";
+import Stories from "./Stories";
 import { Photo } from "@/lib/types";
 
 type TabType = "photos" | "comments";
@@ -22,6 +23,7 @@ export default function Gallery() {
   const [seenPhotos, setSeenPhotos] = useState<Set<string>>(new Set());
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [likingPhotoId, setLikingPhotoId] = useState<string | null>(null);
+  const [showStories, setShowStories] = useState(false);
 
   const gridClasses = {
     1: "grid-cols-1 max-w-xl mx-auto gap-8",
@@ -347,9 +349,23 @@ export default function Gallery() {
                 </span>
               )}
             </motion.p>
-            {/* Hide size picker on mobile */}
-            <div className="hidden sm:block">
-              <SizeSlider value={gridSize} onChange={setGridSize} />
+            {/* Controls: Stories button and size picker */}
+            <div className="flex items-center gap-3">
+              {/* Stories/Slideshow button */}
+              <motion.button
+                onClick={() => setShowStories(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-[#E8B4B8] to-[#A8D8EA] text-[#2D2D2D] rounded-full text-sm font-medium shadow-sm"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <span>▶</span>
+                <span className="hidden sm:inline">Stories</span>
+              </motion.button>
+
+              {/* Hide size picker on mobile */}
+              <div className="hidden sm:block">
+                <SizeSlider value={gridSize} onChange={setGridSize} />
+              </div>
             </div>
           </motion.div>
 
@@ -394,6 +410,17 @@ export default function Gallery() {
         onPhotoUpdate={handlePhotoUpdate}
         onDelete={handleDelete}
       />
+
+      {/* Stories Mode */}
+      <AnimatePresence>
+        {showStories && photos.length > 0 && (
+          <Stories
+            photos={photos}
+            onClose={() => setShowStories(false)}
+            currentUserName={currentUser?.name}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <motion.div
