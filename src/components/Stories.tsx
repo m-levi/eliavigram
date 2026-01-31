@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence, PanInfo } from "framer-motion";
+import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { Photo } from "@/lib/types";
 import { StoryTheme } from "@/lib/ai";
 
@@ -16,63 +16,132 @@ interface StoriesProps {
 
 const STORY_DURATION = 5000; // 5 seconds per story
 
+// Quick reaction emojis
+const QUICK_REACTIONS = ["❤️", "🔥", "😍", "😂", "😮", "👏"];
+
 // Story ring component for the selection screen
 function StoryRing({
   story,
   photos,
   onClick,
   isActive,
+  index,
 }: {
   story: StoryTheme;
   photos: Photo[];
   onClick: () => void;
   isActive: boolean;
+  index: number;
 }) {
   const firstPhoto = photos.find((p) => p.id === story.photoIds[0]);
 
   return (
     <motion.button
       onClick={onClick}
-      className="flex flex-col items-center gap-2 min-w-[80px]"
+      className="flex flex-col items-center gap-3 min-w-[90px] sm:min-w-[100px]"
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
+      initial={{ opacity: 0, scale: 0.8, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{
+        delay: index * 0.1,
+        type: "spring",
+        stiffness: 300,
+        damping: 25,
+      }}
     >
-      <div
-        className={`p-[3px] rounded-full bg-gradient-to-tr ${story.gradient} ${
-          isActive ? "opacity-100" : "opacity-80"
-        }`}
+      <motion.div
+        className={`p-[3px] rounded-full bg-gradient-to-tr ${story.gradient}`}
+        animate={
+          isActive
+            ? { scale: [1, 1.05, 1], boxShadow: ["0 0 0 0 rgba(255,255,255,0.3)", "0 0 20px 5px rgba(255,255,255,0.3)", "0 0 0 0 rgba(255,255,255,0.3)"] }
+            : {}
+        }
+        transition={{ duration: 2, repeat: Infinity }}
       >
-        <div className="p-[2px] bg-black rounded-full">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-gray-800 relative">
+        <div className="p-[3px] bg-black rounded-full">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-gray-800 relative">
             {firstPhoto ? (
               <Image
                 src={firstPhoto.imageUrl}
                 alt={story.title}
                 fill
                 className="object-cover"
-                sizes="80px"
+                sizes="96px"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-2xl">
+              <div className="w-full h-full flex items-center justify-center text-3xl bg-gradient-to-br from-gray-700 to-gray-800">
                 {story.emoji}
               </div>
             )}
           </div>
         </div>
-      </div>
+      </motion.div>
       <div className="text-center">
-        <p className="text-white text-xs font-medium truncate max-w-[80px]">
-          {story.title}
+        <p className="text-white text-sm font-semibold truncate max-w-[90px]">
+          {story.emoji} {story.title}
         </p>
-        <p className="text-white/50 text-[10px]">{story.photoIds.length} photos</p>
+        <p className="text-white/50 text-xs mt-0.5">{story.photoIds.length} photos</p>
       </div>
+    </motion.button>
+  );
+}
+
+// Story thumbnail preview for bottom navigation
+function StoryThumbnail({
+  story,
+  photos,
+  isActive,
+  onClick,
+}: {
+  story: StoryTheme;
+  photos: Photo[];
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const firstPhoto = photos.find((p) => p.id === story.photoIds[0]);
+
+  return (
+    <motion.button
+      onClick={onClick}
+      className="relative"
+      whileTap={{ scale: 0.9 }}
+    >
+      <motion.div
+        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border-2 transition-all ${
+          isActive
+            ? "border-white shadow-lg shadow-white/30"
+            : "border-white/20 opacity-60"
+        }`}
+        animate={isActive ? { scale: 1.1 } : { scale: 1 }}
+        transition={{ type: "spring", stiffness: 300 }}
+      >
+        {firstPhoto ? (
+          <Image
+            src={firstPhoto.imageUrl}
+            alt={story.title}
+            fill
+            className="object-cover"
+            sizes="56px"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-lg bg-gradient-to-br from-gray-700 to-gray-800">
+            {story.emoji}
+          </div>
+        )}
+      </motion.div>
+      {isActive && (
+        <motion.div
+          className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"
+          layoutId="activeStoryIndicator"
+        />
+      )}
     </motion.button>
   );
 }
 
 export default function Stories({
   photos,
-  startIndex = 0,
   onClose,
   currentUserName,
   initialStoryIndex,
@@ -88,8 +157,17 @@ export default function Stories({
   const [isPaused, setIsPaused] = useState(false);
   const [direction, setDirection] = useState(0);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
+  const [sentReaction, setSentReaction] = useState<string | null>(null);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Gesture handling
+  const dragX = useMotionValue(0);
+  const dragY = useMotionValue(0);
+  const rotateY = useTransform(dragX, [-200, 0, 200], [15, 0, -15]);
+  const scale = useTransform(dragX, [-200, 0, 200], [0.95, 1, 0.95]);
+  const opacity = useTransform(dragY, [0, 150], [1, 0]);
 
   // Get current story and its photos
   const currentStory = activeStoryIndex !== null ? stories[activeStoryIndex] : null;
@@ -261,23 +339,51 @@ export default function Stories({
   ) => {
     if (activeStoryIndex === null) {
       // On selection screen, swipe down to close
-      if (info.offset.y > 100) {
+      if (info.offset.y > 100 && info.velocity.y > 0) {
         onClose();
       }
     } else {
       // In story view
-      if (info.offset.y > 100) {
+      if (info.offset.y > 100 && info.velocity.y > 0) {
         // Swipe down - go back to selection
         setActiveStoryIndex(null);
         setCurrentPhotoIndex(0);
         setProgress(0);
-      } else if (info.offset.x < -50) {
-        goNext();
-      } else if (info.offset.x > 50) {
-        goPrev();
+      } else if (Math.abs(info.offset.x) > 50) {
+        // Horizontal swipe - switch stories (not just photos)
+        if (info.offset.x < -50 && info.velocity.x < 0) {
+          // Swipe left - next story
+          if (activeStoryIndex < stories.length - 1) {
+            setDirection(1);
+            setActiveStoryIndex((prev) => (prev !== null ? prev + 1 : 0));
+            setCurrentPhotoIndex(0);
+            setProgress(0);
+            setIsImageLoaded(false);
+          } else {
+            setActiveStoryIndex(null);
+          }
+        } else if (info.offset.x > 50 && info.velocity.x > 0) {
+          // Swipe right - previous story
+          if (activeStoryIndex > 0) {
+            setDirection(-1);
+            setActiveStoryIndex((prev) => (prev !== null ? prev - 1 : 0));
+            setCurrentPhotoIndex(0);
+            setProgress(0);
+            setIsImageLoaded(false);
+          }
+        }
       }
     }
     setIsPaused(false);
+    dragX.set(0);
+    dragY.set(0);
+  };
+
+  // Send reaction
+  const handleReaction = (emoji: string) => {
+    setSentReaction(emoji);
+    setShowReactions(false);
+    setTimeout(() => setSentReaction(null), 2000);
   };
 
   // Check if user has liked current photo
@@ -288,18 +394,21 @@ export default function Stories({
   const slideVariants = {
     enter: (direction: number) => ({
       x: direction > 0 ? "100%" : "-100%",
-      opacity: 0,
-      scale: 0.95,
+      opacity: 0.5,
+      scale: 0.9,
+      rotateY: direction > 0 ? -15 : 15,
     }),
     center: {
       x: 0,
       opacity: 1,
       scale: 1,
+      rotateY: 0,
     },
     exit: (direction: number) => ({
-      x: direction < 0 ? "100%" : "-100%",
+      x: direction < 0 ? "50%" : "-50%",
       opacity: 0,
-      scale: 0.95,
+      scale: 0.8,
+      rotateY: direction < 0 ? 15 : -15,
     }),
   };
 
@@ -307,21 +416,31 @@ export default function Stories({
   if (activeStoryIndex === null) {
     return (
       <motion.div
-        className="fixed inset-0 z-50 bg-black flex flex-col"
+        className="fixed inset-0 z-50 bg-gradient-to-b from-black via-gray-900 to-black flex flex-col story-viewer-mobile"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        style={{ opacity }}
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={0.2}
+        dragElastic={0.3}
         onDragEnd={handleDragEnd}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 pt-12">
-          <h1 className="text-white text-xl font-semibold">Stories</h1>
-          <button
+        <motion.div
+          className="flex items-center justify-between p-4 pt-safe safe-area-top"
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+        >
+          <h1 className="text-white text-xl font-semibold flex items-center gap-2">
+            <span className="text-2xl">✨</span> Stories
+          </h1>
+          <motion.button
             onClick={onClose}
-            className="text-white p-2 hover:bg-white/10 rounded-full transition-colors"
+            className="text-white p-3 hover:bg-white/10 rounded-full transition-colors touch-target"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
           >
             <svg
               className="w-6 h-6"
@@ -336,28 +455,47 @@ export default function Stories({
                 d="M6 18L18 6M6 6l12 12"
               />
             </svg>
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
         {/* Story rings */}
         <div className="flex-1 flex flex-col justify-center px-4">
           {isLoadingStories ? (
-            <div className="flex items-center justify-center">
+            <motion.div
+              className="flex flex-col items-center justify-center gap-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
               <motion.div
-                className="text-4xl"
+                className="text-5xl"
                 animate={{ rotate: 360, scale: [1, 1.2, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
                 ✨
               </motion.div>
-              <p className="text-white/60 ml-4">Creating your stories...</p>
-            </div>
+              <p className="text-white/60 text-center">Creating your stories...</p>
+              <div className="flex gap-2 mt-4">
+                {[0, 1, 2].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="w-2 h-2 bg-white/40 rounded-full"
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                  />
+                ))}
+              </div>
+            </motion.div>
           ) : (
             <>
-              <p className="text-white/60 text-sm mb-6 text-center">
+              <motion.p
+                className="text-white/60 text-sm mb-8 text-center"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
                 Tap a story to start watching
-              </p>
-              <div className="flex gap-4 overflow-x-auto pb-4 px-2 justify-center flex-wrap">
+              </motion.p>
+              <div className="flex gap-5 sm:gap-6 overflow-x-auto scrollbar-hide pb-6 px-4 justify-center flex-wrap">
                 {stories.map((story, index) => (
                   <StoryRing
                     key={story.id}
@@ -370,23 +508,32 @@ export default function Stories({
                       setIsImageLoaded(false);
                     }}
                     isActive={false}
+                    index={index}
                   />
                 ))}
               </div>
-              <p className="text-white/40 text-xs mt-8 text-center">
-                Swipe down to close
-              </p>
             </>
           )}
         </div>
 
-        {/* AI badge */}
-        <div className="p-4 pb-8 flex justify-center">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-full">
+        {/* Bottom hint */}
+        <motion.div
+          className="p-6 pb-safe safe-area-bottom flex flex-col items-center gap-4"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <motion.div
+            className="w-10 h-1 bg-white/20 rounded-full"
+            animate={{ scaleX: [1, 1.2, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          />
+          <p className="text-white/40 text-xs">Swipe down to close</p>
+          <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full">
             <span className="text-sm">✨</span>
-            <span className="text-white/60 text-xs">AI-curated stories</span>
+            <span className="text-white/50 text-xs">AI-curated stories</span>
           </div>
-        </div>
+        </motion.div>
       </motion.div>
     );
   }
@@ -394,20 +541,20 @@ export default function Stories({
   // Full-screen story viewer
   return (
     <motion.div
-      className="fixed inset-0 z-50 bg-black"
+      className="fixed inset-0 z-50 bg-black story-viewer-mobile"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       {/* Progress bars for current story */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 p-2 pt-3 safe-area-top">
+      <div className="absolute top-0 left-0 right-0 z-30 flex gap-1.5 p-3 pt-safe safe-area-top">
         {storyPhotos.map((_, index) => (
           <div
             key={index}
-            className="h-[3px] flex-1 bg-white/30 rounded-full overflow-hidden"
+            className="h-[3px] flex-1 bg-white/20 rounded-full overflow-hidden"
           >
             <motion.div
-              className="h-full bg-white rounded-full"
+              className="h-full bg-white rounded-full story-progress-glow"
               initial={{ width: 0 }}
               animate={{
                 width:
@@ -417,31 +564,37 @@ export default function Stories({
                     ? `${progress}%`
                     : "0%",
               }}
-              transition={{ duration: 0.05 }}
+              transition={{ duration: 0.05, ease: "linear" }}
             />
           </div>
         ))}
       </div>
 
       {/* Header with story info */}
-      <div className="absolute top-8 left-0 right-0 z-30 flex items-center justify-between px-4 py-2">
+      <motion.div
+        className="absolute top-10 left-0 right-0 z-30 flex items-center justify-between px-4 py-2 safe-area-top"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.1 }}
+      >
         <div className="flex items-center gap-3">
           {/* Story thumbnail */}
-          <div
+          <motion.div
             className={`p-[2px] rounded-full bg-gradient-to-tr ${currentStory?.gradient || "from-pink-400 to-purple-500"}`}
+            whileTap={{ scale: 0.95 }}
           >
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-black relative">
+            <div className="w-11 h-11 rounded-full overflow-hidden bg-black relative border border-black">
               {storyPhotos[0] && (
                 <Image
                   src={storyPhotos[0].imageUrl}
                   alt={currentStory?.title || "Story"}
                   fill
                   className="object-cover"
-                  sizes="40px"
+                  sizes="44px"
                 />
               )}
             </div>
-          </div>
+          </motion.div>
           <div>
             <p className="text-white text-sm font-semibold flex items-center gap-2">
               {currentStory?.emoji} {currentStory?.title}
@@ -458,13 +611,15 @@ export default function Stories({
         </div>
 
         {/* Close button */}
-        <button
+        <motion.button
           onClick={() => {
             setActiveStoryIndex(null);
             setCurrentPhotoIndex(0);
             setProgress(0);
           }}
-          className="text-white p-2 hover:bg-white/10 rounded-full transition-colors"
+          className="text-white p-3 hover:bg-white/10 rounded-full transition-colors touch-target"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
         >
           <svg
             className="w-6 h-6"
@@ -479,8 +634,8 @@ export default function Stories({
               d="M6 18L18 6M6 6l12 12"
             />
           </svg>
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
 
       {/* Main photo area - FULL SCREEN */}
       <motion.div
@@ -490,33 +645,45 @@ export default function Stories({
         onMouseDown={() => setIsPaused(true)}
         onMouseUp={() => setIsPaused(false)}
         onMouseLeave={() => setIsPaused(false)}
-        drag="y"
-        dragConstraints={{ top: 0, bottom: 0 }}
+        onTouchStart={() => setIsPaused(true)}
+        onTouchEnd={() => setIsPaused(false)}
+        drag
+        dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
         dragElastic={0.2}
         onDragStart={() => setIsPaused(true)}
         onDragEnd={handleDragEnd}
+        style={{ x: dragX, y: dragY, rotateY, scale }}
       >
         <AnimatePresence initial={false} custom={direction} mode="popLayout">
           {currentPhoto && (
             <motion.div
-              key={currentPhoto.id}
+              key={`${activeStoryIndex}-${currentPhoto.id}`}
               custom={direction}
               variants={slideVariants}
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ duration: 0.3, ease: "easeInOut" }}
+              transition={{
+                duration: 0.4,
+                ease: [0.32, 0.72, 0, 1],
+                opacity: { duration: 0.25 },
+              }}
               className="absolute inset-0"
+              style={{ perspective: 1000 }}
             >
               {/* Loading indicator */}
               {!isImageLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center z-10">
+                <div className="absolute inset-0 flex items-center justify-center z-10 bg-black">
                   <motion.div
-                    className="text-4xl"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="flex flex-col items-center gap-3"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                   >
-                    📷
+                    <motion.div
+                      className="w-12 h-12 rounded-full border-2 border-white/20 border-t-white"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    />
                   </motion.div>
                 </div>
               )}
@@ -536,7 +703,7 @@ export default function Stories({
                   src={currentPhoto.imageUrl}
                   alt={currentPhoto.caption || "Photo"}
                   fill
-                  className={`object-cover transition-opacity duration-300 ${
+                  className={`object-cover transition-opacity duration-500 ${
                     isImageLoaded ? "opacity-100" : "opacity-0"
                   }`}
                   priority
@@ -547,89 +714,142 @@ export default function Stories({
               )}
 
               {/* Gradient overlays for readability */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Navigation hints (subtle) */}
-        <div className="absolute inset-y-0 left-0 w-1/4 flex items-center justify-start pl-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
-          <motion.div
-            className="text-white/30 text-5xl"
-            initial={{ x: -10 }}
-            animate={{ x: 0 }}
-          >
-            ‹
-          </motion.div>
-        </div>
-        <div className="absolute inset-y-0 right-0 w-1/4 flex items-center justify-end pr-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
-          <motion.div
-            className="text-white/30 text-5xl"
-            initial={{ x: 10 }}
-            animate={{ x: 0 }}
-          >
-            ›
-          </motion.div>
-        </div>
       </motion.div>
 
-      {/* Bottom info overlay */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 p-4 pb-8 safe-area-bottom">
+      {/* Sent reaction animation */}
+      <AnimatePresence>
+        {sentReaction && (
+          <motion.div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 2, y: -100 }}
+            transition={{ duration: 0.5 }}
+          >
+            <span className="text-8xl">{sentReaction}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom section */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 safe-area-bottom">
         {/* Caption */}
         {currentPhoto?.caption && (
-          <motion.p
-            className="text-white text-base mb-4 max-w-md font-medium drop-shadow-lg"
+          <motion.div
+            className="px-4 mb-3"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             key={currentPhoto.id}
           >
-            {currentPhoto.caption}
-          </motion.p>
+            <p className="text-white text-lg font-medium drop-shadow-lg max-w-md">
+              {currentPhoto.caption}
+            </p>
+          </motion.div>
         )}
 
         {/* Stats row */}
-        <div className="flex items-center gap-6 text-white/90">
+        <div className="flex items-center gap-4 px-4 mb-4 text-white/90">
           {/* Likes */}
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{userHasLiked ? "❤️" : "🤍"}</span>
+          <motion.div
+            className="flex items-center gap-2"
+            whileTap={{ scale: 0.9 }}
+          >
+            <span className="text-2xl">{userHasLiked ? "❤️" : "🤍"}</span>
             <span className="font-medium">{currentPhoto?.likes?.length || 0}</span>
-          </div>
+          </motion.div>
 
           {/* Comments */}
           {(currentPhoto?.comments?.length || 0) > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-xl">💬</span>
+              <span className="text-2xl">💬</span>
               <span className="font-medium">{currentPhoto?.comments?.length}</span>
             </div>
           )}
 
           {/* Photo counter */}
-          <div className="ml-auto flex items-center gap-2 bg-black/30 px-3 py-1 rounded-full">
-            <span className="text-sm text-white/70">
+          <div className="ml-auto flex items-center gap-2 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            <span className="text-sm text-white/80">
               {currentPhotoIndex + 1} / {storyPhotos.length}
             </span>
           </div>
         </div>
 
-        {/* Story navigation dots */}
-        <div className="flex justify-center gap-2 mt-4">
+        {/* Quick reactions bar */}
+        <motion.div
+          className="px-4 mb-4"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md rounded-full px-4 py-3">
+            <div className="flex-1 flex items-center gap-3">
+              {QUICK_REACTIONS.map((emoji, i) => (
+                <motion.button
+                  key={emoji}
+                  onClick={() => handleReaction(emoji)}
+                  className="text-2xl"
+                  whileHover={{ scale: 1.2 }}
+                  whileTap={{ scale: 0.8 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  {emoji}
+                </motion.button>
+              ))}
+            </div>
+            <div className="w-px h-6 bg-white/20" />
+            <motion.button
+              className="p-2"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <svg
+                className="w-6 h-6 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+            </motion.button>
+          </div>
+        </motion.div>
+
+        {/* Story thumbnails navigation */}
+        <motion.div
+          className="flex justify-center gap-3 px-4 pb-4"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
           {stories.map((story, index) => (
-            <button
+            <StoryThumbnail
               key={story.id}
+              story={story}
+              photos={photos}
+              isActive={index === activeStoryIndex}
               onClick={() => {
-                setActiveStoryIndex(index);
-                setCurrentPhotoIndex(0);
-                setProgress(0);
-                setIsImageLoaded(false);
+                if (index !== activeStoryIndex) {
+                  setDirection(index > (activeStoryIndex || 0) ? 1 : -1);
+                  setActiveStoryIndex(index);
+                  setCurrentPhotoIndex(0);
+                  setProgress(0);
+                  setIsImageLoaded(false);
+                }
               }}
-              className={`w-2 h-2 rounded-full transition-all ${
-                index === activeStoryIndex
-                  ? "bg-white w-6"
-                  : "bg-white/40 hover:bg-white/60"
-              }`}
             />
           ))}
-        </div>
+        </motion.div>
       </div>
 
       {/* Pause indicator */}
@@ -641,7 +861,12 @@ export default function Stories({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="bg-black/60 backdrop-blur-sm rounded-full p-6">
+            <motion.div
+              className="bg-black/60 backdrop-blur-md rounded-full p-6"
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.8 }}
+            >
               <svg
                 className="w-10 h-10 text-white"
                 fill="currentColor"
@@ -650,10 +875,18 @@ export default function Stories({
                 <rect x="6" y="4" width="4" height="16" rx="1" />
                 <rect x="14" y="4" width="4" height="16" rx="1" />
               </svg>
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Navigation hints on first view */}
+      <div className="absolute inset-y-0 left-0 w-1/4 flex items-center justify-start pl-4 opacity-0 active:opacity-100 transition-opacity pointer-events-none">
+        <motion.div className="text-white/40 text-6xl">‹</motion.div>
+      </div>
+      <div className="absolute inset-y-0 right-0 w-1/4 flex items-center justify-end pr-4 opacity-0 active:opacity-100 transition-opacity pointer-events-none">
+        <motion.div className="text-white/40 text-6xl">›</motion.div>
+      </div>
     </motion.div>
   );
 }

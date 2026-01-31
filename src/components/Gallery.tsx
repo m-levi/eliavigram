@@ -8,6 +8,7 @@ import SizeSlider from "./SizeSlider";
 import PhotoModal from "./PhotoModal";
 import CommentsFeed from "./CommentsFeed";
 import StoryBar from "./StoryBar";
+import MobileNav from "./MobileNav";
 import { getSeenPhotos, markPhotoAsSeen, getCurrentUser, UserProfile } from "./PasswordGate";
 import Stories from "./Stories";
 import { Photo } from "@/lib/types";
@@ -402,6 +403,18 @@ export default function Gallery() {
           for a little photographer
         </p>
       </motion.div>
+
+      {/* Mobile bottom nav spacer */}
+      <div className="mobile-nav-spacer" />
+
+      {/* Mobile Navigation */}
+      <MobileNav
+        onStoriesClick={() => {
+          setInitialStoryIndex(0);
+          setShowStories(true);
+        }}
+        hasNewPhotos={unseenCount > 0}
+      />
     </div>
   );
 }
